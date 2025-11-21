@@ -51,6 +51,11 @@ setup(
             'uvicorn>=0.24.0',
             'websockets>=12.0',
         ],
+        'widget': [
+            'pystray>=0.19.0',
+            'Pillow>=10.0.0',
+            'requests>=2.31.0',
+        ],
     },
     entry_points={
         "console_scripts": [

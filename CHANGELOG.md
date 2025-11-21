@@ -7,13 +7,239 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (v0.3.0 - System-Wide Scanning)
-- 7 additional system auditors (OS Updates, Antivirus, Drivers, Disk Health, Backup, Encryption, Firewall)
-- Comprehensive risk scoring system
+### Added
+- **Python Virtual Environment Tracking** - Comprehensive venv detection system
+  - Scans 19 environments: global, local venvs, cross-platform venvs, Poetry, Conda
+  - Detects Mac venvs synced via iCloud (bin/ vs Scripts/ detection)
+  - Reports broken/empty venvs with warnings
+  - Analyzes duplicate packages across environments (20 duplicates found)
+  - Identifies orphaned global packages (15 also installed in venvs)
+  - Smart recommendations with clear math: "67 global → 52 after cleanup"
+  - Missing requirements.txt detection
+  - New PythonVenvDetails component with environment dropdown and package lists
+
+- **Orphaned Global Package Removal** - Interactive cleanup tool
+  - Checkbox selection for individual packages or "Select All"
+  - Shows count: "Select All (3/15)"
+  - Red "Uninstall Selected" button (disabled when none selected)
+  - Humble warning modal: "Our system is not foolproof. This could potentially cause issues we cannot foresee..."
+  - Uses `/api/cleanup/python/uninstall` endpoint with `pip uninstall -y`
+  - Auto-refreshes page after successful uninstallation
+
+- **Dashboard UI Enhancements**
+  - Custom ConfirmModal component (replaces browser confirm dialogs)
+  - Modal footer: Changed from bright white (gray-50) to softer gray-100
+  - Delete current scan capability with special warning
+  - Scan history: Compact inline layout (was 2-column grid with excessive spacing)
+  - Python card: Quick action buttons ("Copy Check Command", "Copy Freeze Command")
+  - Python card: "All Packages Up to Date" green badge when outdated count is 0
+  - Pre-scan state: "Analyzing System Security" amber spinner (was premature "All Systems Healthy")
+
+### Fixed
+- **Python Venv Naming Bug**: Fixed `.venv/.venv` duplication → now shows `devaudit/.venv`
+- **Cross-Platform Venv Detection**: Mac venvs with `bin/pip` now detected on Windows
+- **Empty Space in Python Card**: Added health summary and quick actions to fill 2/3 empty space
+- **Scan History Spacing**: Changed from `grid-cols-2` to `flex gap-x-4` for tighter layout
+- **Orphaned Package Clarity**: Now shows "67 global packages. 15 also in venvs. Removing = 52" instead of vague "Consider removing 15"
+- **Scan History Limit Bug**: Changed backend limit from 10 → 100 scans (was showing "next 10" after delete)
+- **History Display Message**: Now shows actual count "Showing 47 most recent scans" instead of hardcoded "10"
+
+## [0.3.0-alpha] - 2025-01-21 (Polish & Bug Fixes - 95% Complete)
+
+### Fixed
+
+#### Critical Bug Fixes
+- **Disk Health Auditor - Smart Drive Detection**
+  - Fixed false CRITICAL alerts from USB sticks and small drives (<10GB)
+  - Added MIN_SIZE_FOR_ALERTS_GB = 10 threshold
+  - Small drives now tracked separately with `small_drives_skipped` counter
+  - Recommendations now mention excluded drives (e.g., "Note: 1 small drive(s) <10GB excluded")
+  - Example: 4GB USB stick no longer triggers CRITICAL disk space warnings
+
+- **Encryption Auditor - Graceful Non-Admin Handling**
+  - Fixed `installed: False` when run without administrator privileges
+  - Now returns `installed: True` with `status_unknown: True` flag
+  - Added warning: "Administrator privileges may be required for detailed BitLocker information"
+  - Risk level changed from CRITICAL to MEDIUM when status is unknown
+  - Empty PowerShell output now detected and handled gracefully
+  - Provides guidance to run as admin or manually check encryption settings
+
+- **Carousel Component - Robust Error Handling**
+  - Added `isValidAuditor()` helper to validate auditor data before rendering
+  - Filters out auditors with `installed: false` or missing data
+  - Added empty state UI when no valid auditors are available
+  - Implemented `safeCurrentIndex` to prevent out-of-bounds array access
+  - Added bounds checking in `goToSlide()` and `getVisibleCards()`
+  - Carousel now handles dynamic auditor changes without breaking
+
+### Changed
+- EncryptionAuditor.requires_elevation() now returns False (was True)
+- Dashboard carousel validates all auditor data structures before display
+- Test script updated to test all 7 system auditors comprehensively
+
+## [0.3.0-alpha] - 2025-01-20 (In Development - 90% Complete)
+
+### 🎉 Major Milestone: System-Wide Security Scanning
+
+**7 System Auditors Completed:**
+- ✅ BIOS/UEFI - Firmware age tracking and update recommendations
+- ✅ OS Updates - Windows Update, macOS softwareupdate, Linux apt/yum/dnf/pacman
+- ✅ Antivirus - Windows Defender + third-party AV detection
+- ✅ Firewall - Multi-profile status (Domain/Private/Public)
+- ✅ Disk Health - Space monitoring across all drives
+- ✅ Backup Status - Windows Backup, Time Machine, rsnapshot/timeshift/borg
+- ✅ Disk Encryption - BitLocker, FileVault, LUKS detection
+
+**Total Auditors: 12** (up from 9)
+
+### Added
+
+#### System Auditors
+- **OS Update Auditor** - Cross-platform update detection
+  - Windows: PowerShell `Get-WindowsUpdate` and Windows Update COM
+  - macOS: `softwareupdate --list`
+  - Linux: apt/yum/dnf/pacman update checks
+  - Tracks pending updates and security patches
+  - Risk: CRITICAL (5+ security updates), HIGH (1-4 security), MEDIUM (10+ updates), LOW (1-9 updates)
+
+- **Antivirus Auditor** - Comprehensive AV status monitoring
+  - Windows: Security Center + `Get-MpComputerStatus` for Defender
+  - macOS: XProtect detection + third-party AV scanning
+  - Linux: ClamAV and common AV process detection
+  - Checks enabled status, definition freshness, real-time protection
+  - Risk: CRITICAL (no AV or disabled), HIGH (outdated definitions 3+ days)
+
+- **Firewall Auditor** - Network protection status
+  - Windows: All 3 profiles (Domain/Private/Public) via PowerShell
+  - macOS: `socketfilterfw` status
+  - Linux: ufw, firewalld, iptables detection
+  - Checks enabled status and default policies
+  - Risk: CRITICAL (disabled), MEDIUM (allow-by-default inbound)
+
+- **Disk Health Auditor** - Storage space monitoring
+  - Cross-platform disk space tracking (df, Get-PSDrive)
+  - Per-drive usage percentage and free space
+  - Risk: CRITICAL (95%+ full), HIGH (90%+), MEDIUM (85%+), LOW (75%+)
+  - Prevents security update failures from low disk space
+
+- **Backup Status Auditor** - Data protection verification
+  - Windows: Windows Backup + File History detection
+  - macOS: Time Machine status via `tmutil`
+  - Linux: rsnapshot, timeshift, borg, duplicity, restic detection
+  - Tracks last backup date and frequency
+  - Risk: CRITICAL (no backups), HIGH (30+ days old or disabled)
+
+- **Disk Encryption Auditor** - Device theft protection
+  - Windows: BitLocker status via PowerShell
+  - macOS: FileVault status via `fdesetup`
+  - Linux: LUKS encrypted volume detection
+  - Risk: CRITICAL (no encryption), HIGH (partial encryption)
+
+#### Educational Content
+- Created 7 comprehensive security guides in `docs/concepts/`:
+  - `bios-updates.md` - Supply chain attacks, firmware security
+  - `os-updates.md` - WannaCry case study, patch management
+  - `antivirus.md` - Equifax breach, real-time protection
+  - `firewall.md` - Network security, port scanning
+  - `disk-health.md` - Update failures, disk space management
+  - `backups.md` - 3-2-1 rule, ransomware recovery
+  - `disk-encryption.md` - Theft protection, identity theft
+
+- Each guide includes:
+  - Real-world breach examples
+  - Platform-specific "HOW TO FIX" instructions
+  - When to update / when to skip guidance
+  - Learn more links to official documentation
+
+#### Dashboard Enhancements
+- **System Auditor Carousel** - Responsive card navigation
+  - Desktop: Shows 3 cards at once
+  - Tablet: Shows 2 cards
+  - Mobile: Shows 1 card
+  - Click summary indicators to jump to specific auditor
+  - Smooth arrow navigation with progress dots
+
+- **Startup UX Improvement** - Load latest scan automatically
+  - Dashboard now loads most recent scan on startup (no more blank screen!)
+  - Blue banner shows "Viewing previous scan from [timestamp]"
+  - Prompts user to "Run Scan" for fresh data
+  - Historical data clearly distinguished from live scans
+
+- **Uniform Card Heights** - Professional layout
+  - All auditor cards fixed at 320px min-height
+  - Flexbox layout with flex-grow for consistent spacing
+  - Recommendation section always at same position
+  - Condensed Firewall profiles to inline display
+
+#### Backend Improvements
+- **Scanner Enhancement** - 12 total auditors now running
+  - Added 3 new system auditors to scan rotation
+  - All auditors execute in sequence with real-time WebSocket updates
+  - Updated progress indicators (current/total)
+
+- **History API** - Better scan access
+  - New `/api/history/latest` endpoint
+  - Returns most recent scan for startup loading
+  - `ScanHistory.get_latest_scan()` method added
+
+### Fixed
+
+#### Critical Bugs
+- **Windows 11 Detection** - Was showing "Windows 10 Pro 2009"
+  - Root cause: `Get-ComputerInfo` unreliable on Windows 11
+  - Fix: Use `Win32_OperatingSystem` with build number detection
+  - Now correctly shows "Windows 11 Pro, Version 26200"
+  - File: `devaudit/auditors/system_auditors/os_update_audit.py`
+
+- **Windows Defender "Outdated" False Positive** - Always showed outdated even after updates
+  - Root cause: PowerShell returns .NET JSON date format `/Date(1763641115000)/`
+  - Code tried to parse as ISO format, failed silently
+  - Fix: Added regex parser for .NET dates, relaxed threshold to 3 days
+  - Now correctly shows "Updated: True" after recent Security Intelligence updates
+  - File: `devaudit/auditors/system_auditors/antivirus_audit.py`
+
+- **Race Condition During Scan** - False "no package managers detected"
+  - Issue: VulnerabilityCard rendered with partial data before package auditors completed
+  - Fix: Added `isScanning` prop, show "Scanning package managers..." while in progress
+  - No more misleading "all clear" messages during scans
+  - File: `dashboard/src/components/VulnerabilityCard.tsx`
+
+#### UI/UX Improvements
+- **Firewall Card Height** - Was taller than other cards
+  - Condensed profile display from list to inline: "Domain: ON Private: ON Public: ON"
+  - Saves vertical space, maintains readability
+
+- **Missing "HOW TO FIX" Instructions** - Recommendations didn't explain where to fix issues
+  - Added platform-specific step-by-step instructions to all recommendations
+  - Example: "HOW TO FIX: Settings → Windows Update → Check for updates → Install all"
+  - Users no longer confused about how to remediate findings
+
+### Known Issues (To Fix Next Session)
+- ⚠️ **USB Stick False Positive** - Drive E: (4GB USB) triggers CRITICAL alert
+  - Should filter drives <10GB from critical disk space warnings
+  - Need logic to distinguish USB sticks from system drives
+
+- ⚠️ **Encryption Auditor Edge Case** - Returns `installed: False` without admin
+  - Should return `installed: True` with warnings instead
+  - Needs graceful degradation for privilege requirements
+
+- ⚠️ **Carousel Empty State** - Behaves oddly with missing/invalid auditor data
+  - Need better handling for auditors that return non-standard results
+
+### Validation
+
+**DevAudit Successfully Caught What Windows Missed!**
+- User's Windows Update said "You're up to date"
+- DevAudit found 3 pending updates
+- User clicked "Check for updates" → Windows found them!
+- After installing one: DevAudit accurately showed 3 → 2 updates
+
+This validates DevAudit's value as a proactive security assistant.
 
 ### In Progress
-- ✅ BIOS/UEFI auditor - Implemented and integrated
-- ✅ Dashboard integration for system security - Live with SystemSecurityCard component
+- ✅ All major v0.3.0 features complete (90% done)
+- 🔜 Polish and edge case fixes
+- 🔜 Cross-platform testing (macOS, Linux)
 
 ### Planned (v0.4.0+)
 - Cloud-based scanning (Ephemeral and Encrypted tiers)

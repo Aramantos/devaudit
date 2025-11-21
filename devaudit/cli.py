@@ -219,5 +219,31 @@ def serve(port, host, no_browser):
         console.print(f"[red]Error starting server: {str(e)}[/red]\n")
 
 
+@main.command()
+@click.option('--api-url', default='http://127.0.0.1:8888', help='DevAudit API URL (default: http://127.0.0.1:8888)')
+@click.option('--update-interval', default=300, help='Status update interval in seconds (default: 300)')
+def widget(api_url, update_interval):
+    """Run system tray widget for real-time status monitoring"""
+    console.print(f"\n[bold cyan]DevAudit System Tray Widget[/bold cyan]\n")
+    console.print(f"[green]Starting widget...[/green]")
+    console.print(f"[dim]API URL:[/dim] {api_url}")
+    console.print(f"[dim]Update interval:[/dim] {update_interval}s")
+    console.print(f"[dim]Look for the shield icon in your system tray[/dim]")
+    console.print(f"[dim]Press Ctrl+C to stop[/dim]\n")
+
+    try:
+        from .widget import run_widget
+        exit_code = run_widget(api_url=api_url, update_interval=update_interval)
+        sys.exit(exit_code)
+    except ImportError as e:
+        console.print("[red]Error: Missing dependencies for widget[/red]")
+        console.print("[yellow]Install with: pip install 'devaudit[widget]'[/yellow]")
+        console.print(f"[dim]Details: {str(e)}[/dim]\n")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Widget stopped[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error starting widget: {str(e)}[/red]\n")
+
+
 if __name__ == "__main__":
     main()

@@ -185,6 +185,37 @@ async def upgrade_python_packages(packages: List[str]):
         }, status_code=500)
 
 
+@app.post("/api/cleanup/python/uninstall")
+async def uninstall_python_packages(packages: List[str]):
+    """Uninstall Python packages from global environment."""
+    import subprocess
+
+    try:
+        results = []
+        for package in packages:
+            proc = subprocess.run(
+                ["pip", "uninstall", "-y", package],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            results.append({
+                "package": package,
+                "success": proc.returncode == 0,
+                "output": proc.stdout if proc.returncode == 0 else proc.stderr
+            })
+
+        return {
+            "status": "completed",
+            "results": results
+        }
+    except Exception as e:
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+
 @app.post("/api/cleanup/node/upgrade")
 async def upgrade_node_packages(packages: List[str]):
     """Upgrade Node.js packages."""
@@ -279,7 +310,7 @@ async def remove_docker_images(image_ids: List[str]):
 
 
 @app.get("/api/history")
-async def get_scan_history(limit: int = 10):
+async def get_scan_history(limit: int = 100):
     """Get scan history."""
     if scan_history is None:
         return JSONResponse({
@@ -292,6 +323,34 @@ async def get_scan_history(limit: int = 10):
         return {
             "status": "success",
             "scans": scans
+        }
+    except Exception as e:
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=500)
+
+
+@app.get("/api/history/latest")
+async def get_latest_scan():
+    """Get the most recent scan."""
+    if scan_history is None:
+        return JSONResponse({
+            "status": "error",
+            "message": "History not initialized"
+        }, status_code=500)
+
+    try:
+        latest = scan_history.get_latest_scan()
+        if latest is None:
+            return JSONResponse({
+                "status": "not_found",
+                "message": "No scans found"
+            }, status_code=404)
+
+        return {
+            "status": "success",
+            "scan": latest
         }
     except Exception as e:
         return JSONResponse({
@@ -390,6 +449,155 @@ async def update_scan_notes(scan_id: str, body: dict = Body(...)):
         "status": "success",
         "message": "Notes updated"
     }
+
+
+# Widget status cache
+widget_status_cache = {
+    "data": None,
+    "timestamp": 0
+}
+
+
+@app.get("/api/status/quick")
+async def get_quick_status():
+    """
+    Lightweight status endpoint for widgets.
+
+    Returns minimal data for frequent polling by system tray/mobile widgets.
+    Response is cached for 60 seconds to avoid excessive computation.
+    """
+    import time
+
+    # Check cache (60 second TTL)
+    cache_age = time.time() - widget_status_cache["timestamp"]
+    if widget_status_cache["data"] is not None and cache_age < 60:
+        return widget_status_cache["data"]
+
+    # Get most recent scan from history
+    if scan_history is None:
+        return {
+            "status": "unknown",
+            "color": "gray",
+            "summary": "Scanner not initialized",
+            "risk_level": "none",
+            "counts": {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0
+            },
+            "last_scan": None,
+            "auditors": {}
+        }
+
+    try:
+        scans = scan_history.list_scans(limit=1)
+        if not scans:
+            response = {
+                "status": "no_scan",
+                "color": "gray",
+                "summary": "No scans yet",
+                "risk_level": "none",
+                "counts": {
+                    "critical": 0,
+                    "high": 0,
+                    "medium": 0,
+                    "low": 0
+                },
+                "last_scan": None,
+                "auditors": {}
+            }
+        else:
+            latest_scan = scans[0]
+            results = latest_scan.get("results", {})
+            summary_data = latest_scan.get("summary", {})
+
+            # Calculate status from results
+            risk_counts = summary_data.get("risk_counts", {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "none": 0
+            })
+
+            vulnerabilities = summary_data.get("total_vulnerabilities", 0)
+
+            # Determine overall status and color
+            if risk_counts.get("critical", 0) > 0:
+                status = "critical"
+                color = "red"
+                risk_level = "critical"
+            elif risk_counts.get("high", 0) > 0 or vulnerabilities > 0:
+                status = "warning"
+                color = "yellow"
+                risk_level = "high"
+            elif risk_counts.get("medium", 0) > 0:
+                status = "attention"
+                color = "yellow"
+                risk_level = "medium"
+            else:
+                status = "ok"
+                color = "green"
+                risk_level = "low"
+
+            # Generate summary text
+            issues = []
+            if risk_counts.get("critical", 0) > 0:
+                issues.append(f"{risk_counts['critical']} critical")
+            if risk_counts.get("high", 0) > 0:
+                issues.append(f"{risk_counts['high']} high")
+            if vulnerabilities > 0:
+                issues.append(f"{vulnerabilities} vulnerabilities")
+
+            if issues:
+                summary = ", ".join(issues)
+            else:
+                summary = "All systems secure"
+
+            # Get auditor statuses
+            auditor_statuses = {}
+            for auditor_name, auditor_result in results.items():
+                if isinstance(auditor_result, dict):
+                    auditor_risk = auditor_result.get("risk_level", "none")
+                    auditor_statuses[auditor_name] = "ok" if auditor_risk in ["none", "low"] else "warning"
+
+            response = {
+                "status": status,
+                "color": color,
+                "summary": summary,
+                "risk_level": risk_level,
+                "counts": {
+                    "critical": risk_counts.get("critical", 0),
+                    "high": risk_counts.get("high", 0),
+                    "medium": risk_counts.get("medium", 0),
+                    "low": risk_counts.get("low", 0)
+                },
+                "last_scan": latest_scan.get("timestamp"),
+                "auditors": auditor_statuses
+            }
+
+        # Update cache
+        widget_status_cache["data"] = response
+        widget_status_cache["timestamp"] = time.time()
+
+        return response
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "color": "gray",
+            "summary": f"Error: {str(e)}",
+            "risk_level": "none",
+            "counts": {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0
+            },
+            "last_scan": None,
+            "auditors": {}
+        }
 
 
 # Mount static files if dashboard exists

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & Support
+    url: https://github.com/Aramantos/devaudit/discussions
+    about: Ask questions or get help using DevAudit
+  - name: Security Vulnerability
+    url: https://github.com/Aramantos/devaudit/security/advisories/new
+    about: Report a security vulnerability (private disclosure)

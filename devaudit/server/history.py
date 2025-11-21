@@ -120,6 +120,20 @@ class ScanHistory:
         index = self._load_index()
         return index["scans"][:limit]
 
+    def get_latest_scan(self) -> Optional[Dict]:
+        """
+        Get the most recent scan.
+
+        Returns:
+            Latest scan data or None if no scans exist
+        """
+        index = self._load_index()
+        if not index["scans"]:
+            return None
+
+        latest_id = index["scans"][0]["id"]
+        return self.get_scan(latest_id)
+
     def compare_scans(self, scan_id_1: str, scan_id_2: str) -> Dict:
         """
         Compare two scans and return differences.

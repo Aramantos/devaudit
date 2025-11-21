@@ -4,12 +4,22 @@ Real-time scanner that streams audit results via WebSocket.
 
 from ..auditors import (
     PythonAuditor,
+    PythonVenvAuditor,
     NodeAuditor,
     DockerAuditor,
     GoAuditor,
     SystemAuditor,
 )
-from ..auditors.system_auditors import BIOSAuditor
+from ..auditors.system_auditors import (
+    BIOSAuditor,
+    OSUpdateAuditor,
+    AntivirusAuditor,
+    FirewallAuditor,
+    DiskHealthAuditor,
+    BackupAuditor,
+    EncryptionAuditor,
+    DriverAuditor,
+)
 import asyncio
 from typing import Dict, Callable, Optional
 from pathlib import Path
@@ -32,11 +42,19 @@ class RealtimeScanner:
         self.current_auditor = None
         self.auditors = [
             PythonAuditor(),
+            PythonVenvAuditor(),
             NodeAuditor(),
             DockerAuditor(),
             GoAuditor(),
             SystemAuditor(),
             BIOSAuditor(),
+            OSUpdateAuditor(),
+            AntivirusAuditor(),
+            FirewallAuditor(),
+            DriverAuditor(),
+            DiskHealthAuditor(),
+            BackupAuditor(),
+            EncryptionAuditor(),
         ]
 
     async def run_scan(self, target_dir: Optional[str] = None):
@@ -155,6 +173,16 @@ class RealtimeScanner:
         total_packages = 0
         total_outdated = 0
         total_cleanup = 0
+        total_vulnerabilities = 0
+
+        # Risk level counters
+        risk_counts = {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "none": 0
+        }
 
         for tool_result in results.values():
             if isinstance(tool_result, dict):
@@ -167,10 +195,31 @@ class RealtimeScanner:
                 cleanup = tool_result.get('cleanup_candidates', [])
                 total_cleanup += len(cleanup) if isinstance(cleanup, list) else 0
 
+                # Count vulnerabilities
+                vulnerabilities = tool_result.get('vulnerabilities', [])
+                total_vulnerabilities += len(vulnerabilities) if isinstance(vulnerabilities, list) else 0
+
+                # Count risk levels
+                risk_level = tool_result.get('risk_level', 'none')
+                if risk_level in risk_counts:
+                    risk_counts[risk_level] += 1
+
+        # Calculate overall status
+        overall_status = "ok"
+        if risk_counts["critical"] > 0:
+            overall_status = "critical"
+        elif risk_counts["high"] > 0 or total_vulnerabilities > 0:
+            overall_status = "warning"
+        elif risk_counts["medium"] > 0 or total_outdated > 5:
+            overall_status = "attention"
+
         return {
             "tools_detected": tools_detected,
             "total_tools": total_tools,
             "total_packages": total_packages,
             "total_outdated_packages": total_outdated,
-            "total_cleanup_candidates": total_cleanup
+            "total_cleanup_candidates": total_cleanup,
+            "total_vulnerabilities": total_vulnerabilities,
+            "risk_counts": risk_counts,
+            "overall_status": overall_status
         }

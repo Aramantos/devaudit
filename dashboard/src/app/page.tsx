@@ -3,10 +3,14 @@
 import { useState, useEffect } from 'react';
 import { Overview } from '@/components/Overview';
 import { PythonDetails } from '@/components/PythonDetails';
+import { PythonVenvDetails } from '@/components/PythonVenvDetails';
 import { NodeDetails } from '@/components/NodeDetails';
 import { DockerDetails } from '@/components/DockerDetails';
 import { VulnerabilityCard } from '@/components/VulnerabilityCard';
 import { SystemSecurityCard } from '@/components/SystemSecurityCard';
+import { SystemAuditorCard } from '@/components/SystemAuditorCard';
+import { SystemAuditorCarousel } from '@/components/SystemAuditorCarousel';
+import { ActionsCard } from '@/components/ActionsCard';
 import { ScanHistory } from '@/components/ScanHistory';
 import { ComparisonView } from '@/components/ComparisonView';
 import { RealtimeStatus } from '@/components/RealtimeStatus';
@@ -14,7 +18,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
 import { useWebSocket } from '@/lib/websocket';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
-import { Play, Loader, HelpCircle } from 'lucide-react';
+import { Play, Loader, HelpCircle, Info } from 'lucide-react';
 
 export default function Dashboard() {
   const [auditData, setAuditData] = useState<any>(null);
@@ -23,6 +27,8 @@ export default function Dashboard() {
   const [currentScanId, setCurrentScanId] = useState<string | null>(null);
   const [comparisonScanIds, setComparisonScanIds] = useState<{ id1: string; id2: string } | null>(null);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [isHistoricalData, setIsHistoricalData] = useState(false);
+  const [scanTimestamp, setScanTimestamp] = useState<string | null>(null);
   const { connected, lastMessage, connect } = useWebSocket();
 
   // Global keyboard shortcuts
@@ -38,6 +44,28 @@ export default function Dashboard() {
   // Connect to WebSocket on mount
   useEffect(() => {
     connect();
+  }, []);
+
+  // Load latest scan on mount
+  useEffect(() => {
+    const loadLatestScan = async () => {
+      try {
+        const response = await fetch('/api/history/latest');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'success' && data.scan) {
+            setAuditData(data.scan.results);
+            setCurrentScanId(data.scan.id);
+            setScanTimestamp(data.scan.timestamp);
+            setIsHistoricalData(true);
+          }
+        }
+      } catch (error) {
+        console.log('No previous scans found or error loading:', error);
+      }
+    };
+
+    loadLatestScan();
   }, []);
 
   // Handle WebSocket messages
@@ -68,6 +96,8 @@ export default function Dashboard() {
             setAuditData(data.results);
             setIsScanning(false);
             setScanProgress({ current: 0, total: 0 });
+            setIsHistoricalData(false);
+            setScanTimestamp(new Date().toISOString());
             if (data.scan_id) {
               setCurrentScanId(data.scan_id);
             }
@@ -133,7 +163,7 @@ export default function Dashboard() {
                 <button
                   onClick={triggerScan}
                   disabled={isScanning}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg hover:shadow-blue-500/50 text-sm font-semibold"
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm text-sm font-semibold"
                 >
                   {isScanning ? (
                     <>
@@ -156,7 +186,7 @@ export default function Dashboard() {
                 <button
                   onClick={triggerScan}
                   disabled={isScanning}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg hover:shadow-blue-500/50 min-w-[140px] justify-center"
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm min-w-[140px] justify-center"
                 >
                   {isScanning ? (
                     <>
@@ -179,6 +209,19 @@ export default function Dashboard() {
             scanning={isScanning}
             progress={scanProgress}
           />
+
+          {/* Historical Data Banner */}
+          {isHistoricalData && auditData && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center gap-2 text-sm">
+                <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <p className="text-blue-700 dark:text-blue-300">
+                  <span className="font-semibold">Viewing previous scan</span> from{' '}
+                  {scanTimestamp && new Date(scanTimestamp).toLocaleString()} — Click "Run Scan" for fresh data
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -190,12 +233,22 @@ export default function Dashboard() {
 
             {/* Vulnerability Card - Full Width */}
             <div className="mt-6">
-              <VulnerabilityCard data={auditData} />
+              <VulnerabilityCard data={auditData} isScanning={isScanning} />
             </div>
 
             {/* System Security Card */}
             <div className="mt-6">
               <SystemSecurityCard data={auditData} />
+            </div>
+
+            {/* System Auditors Carousel */}
+            <div className="mt-6">
+              <SystemAuditorCarousel data={auditData} />
+            </div>
+
+            {/* Recommended Actions */}
+            <div className="mt-6">
+              <ActionsCard systemAuditors={auditData} isScanning={isScanning} />
             </div>
 
             {/* Scan History */}
@@ -205,6 +258,7 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               {auditData.Python && <PythonDetails data={auditData.Python} />}
+              {auditData['Python Environments'] && <PythonVenvDetails data={auditData['Python Environments']} />}
               {auditData['Node.js'] && <NodeDetails data={auditData['Node.js']} />}
               {auditData.Docker && <DockerDetails data={auditData.Docker} />}
               {auditData.Go && (
@@ -223,15 +277,31 @@ export default function Dashboard() {
         ) : (
           <div className="flex items-center justify-center h-full min-h-[400px]">
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
-                <Play className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Ready to audit your environment
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400">
-                Click "Run Scan" to start auditing your development tools and packages
-              </p>
+              {isScanning ? (
+                <>
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
+                    <Loader className="w-8 h-8 text-amber-600 dark:text-amber-400 animate-spin" />
+                  </div>
+                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    System scan in progress
+                  </h2>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    Analyzing your development tools and packages...
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
+                    <Play className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Ready to audit your environment
+                  </h2>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    Click "Run Scan" to start auditing your development tools and packages
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -250,40 +320,31 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-4 text-xs">
               <a
-                href="https://github.com/aramantos/devaudit/blob/main/VISION.md"
+                href="https://github.com/aramantos/devaudit"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                title="Our mission and principles"
+                title="View on GitHub"
               >
-                Vision
+                GitHub
               </a>
               <a
-                href="https://github.com/aramantos/devaudit/blob/main/USE_CASES.md"
+                href="https://github.com/aramantos/devaudit/blob/main/README.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                title="How people use DevAudit"
-              >
-                Use Cases
-              </a>
-              <a
-                href="https://github.com/aramantos/devaudit/blob/main/ROADMAP.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                title="What's coming next"
-              >
-                Roadmap
-              </a>
-              <a
-                href="https://github.com/aramantos/devaudit/blob/main/docs/README.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                title="Educational resources"
+                title="Getting Started Guide"
               >
                 Docs
+              </a>
+              <a
+                href="https://github.com/aramantos/devaudit/blob/main/CONTRIBUTING.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                title="Contribute to DevAudit"
+              >
+                Contribute
               </a>
               <button
                 onClick={() => setShowKeyboardHelp(true)}

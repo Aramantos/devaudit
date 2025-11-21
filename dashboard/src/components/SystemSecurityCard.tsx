@@ -91,12 +91,7 @@ export function SystemSecurityCard({ data }: SystemSecurityCardProps) {
           ))}
         </div>
 
-        {/* Coming Soon Hint */}
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dark-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            <span className="font-medium">Coming soon:</span> OS updates, antivirus status, firewall, disk health, backups, encryption, and more.
-          </p>
-        </div>
+        {/* System auditors shown below in dedicated cards */}
       </div>
 
       {/* Educational Modal */}

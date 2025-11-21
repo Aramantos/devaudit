@@ -20,17 +20,21 @@ All system auditors inherit from BaseAuditor and provide:
 
 # System auditors
 from .bios_audit import BIOSAuditor
-
-# Placeholders for future auditors (v0.3.0)
-# from .os_audit import OSAuditor
-# from .antivirus_audit import AntivirusAuditor
-# from .driver_audit import DriverAuditor
-# from .disk_audit import DiskAuditor
-# from .backup_audit import BackupAuditor
-# from .encryption_audit import EncryptionAuditor
-# from .firewall_audit import FirewallAuditor
+from .os_update_audit import OSUpdateAuditor
+from .antivirus_audit import AntivirusAuditor
+from .firewall_audit import FirewallAuditor
+from .disk_health_audit import DiskHealthAuditor
+from .backup_audit import BackupAuditor
+from .encryption_audit import EncryptionAuditor
+from .driver_audit import DriverAuditor
 
 __all__ = [
     "BIOSAuditor",
-    # Will be populated as more auditors are implemented
+    "OSUpdateAuditor",
+    "AntivirusAuditor",
+    "FirewallAuditor",
+    "DiskHealthAuditor",
+    "BackupAuditor",
+    "EncryptionAuditor",
+    "DriverAuditor",
 ]

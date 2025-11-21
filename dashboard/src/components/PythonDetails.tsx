@@ -88,6 +88,41 @@ export function PythonDetails({ data }: PythonDetailsProps) {
             </div>
           </div>
         )}
+
+        {/* Package Health Summary - fills empty space */}
+        {outdatedCount === 0 && (
+          <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <h3 className="text-sm font-semibold text-green-900 dark:text-green-100">
+                All Packages Up to Date
+              </h3>
+            </div>
+            <p className="text-xs text-green-700 dark:text-green-300">
+              All {totalPackages} installed packages are running the latest available versions.
+              Great job keeping your Python environment secure and up-to-date!
+            </p>
+          </div>
+        )}
+
+        {/* Quick Actions - always visible */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dark-600">
+          <h3 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Quick Actions</h3>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigator.clipboard.writeText('pip list --outdated')}
+              className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
+            >
+              Copy Check Command
+            </button>
+            <button
+              onClick={() => navigator.clipboard.writeText('pip freeze > requirements.txt')}
+              className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
+            >
+              Copy Freeze Command
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

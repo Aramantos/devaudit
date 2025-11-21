@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Clock, TrendingDown, TrendingUp, Calendar, ChevronRight, Trash2, GitCompare, Download, FileJson, FileText, Search, X, Edit2, Save, Tag, Command } from 'lucide-react';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
+import { ConfirmModal } from './ConfirmModal';
 
 interface HistoryScan {
   id: string;
@@ -29,6 +30,8 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [editingNotesValue, setEditingNotesValue] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [scanToDelete, setScanToDelete] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcuts
@@ -92,23 +95,36 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
     }
   };
 
-  const deleteScan = async (scanId: string) => {
-    if (!confirm('Are you sure you want to delete this scan?')) return;
+  const openDeleteModal = (scanId: string) => {
+    setScanToDelete(scanId);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!scanToDelete) return;
 
     try {
-      const response = await fetch(`/api/history/${scanId}`, {
+      const response = await fetch(`/api/history/${scanToDelete}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        setScans(scans.filter(s => s.id !== scanId));
-        if (selectedForCompare === scanId) {
+        setScans(scans.filter(s => s.id !== scanToDelete));
+        if (selectedForCompare === scanToDelete) {
           setSelectedForCompare(null);
         }
       }
     } catch (error) {
       console.error('Failed to delete scan:', error);
     }
+
+    setDeleteModalOpen(false);
+    setScanToDelete(null);
+  };
+
+  const cancelDelete = () => {
+    setDeleteModalOpen(false);
+    setScanToDelete(null);
   };
 
   const handleCompareSelect = (scanId: string) => {
@@ -413,15 +429,15 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
                     )}
                   </div>
 
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center justify-between">
+                  {/* Stats - Compact inline layout */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <div className="flex items-center gap-1">
                       <span className="text-gray-600 dark:text-gray-400">Packages:</span>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">
                         {scan.summary.total_packages}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
                       <span className="text-gray-600 dark:text-gray-400">Outdated:</span>
                       <span className={`font-semibold ${
                         scan.summary.outdated_packages > 0
@@ -431,7 +447,7 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
                         {scan.summary.outdated_packages}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
                       <span className="text-gray-600 dark:text-gray-400">Vulnerabilities:</span>
                       <span className={`font-semibold ${
                         scan.summary.vulnerabilities > 0
@@ -441,7 +457,7 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
                         {scan.summary.vulnerabilities}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
                       <span className="text-gray-600 dark:text-gray-400">Tools:</span>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">
                         {scan.summary.tools_detected}
@@ -522,15 +538,13 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
                   >
                     <GitCompare className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                   </button>
-                  {!isCurrentScan && (
-                    <button
-                      onClick={() => deleteScan(scan.id)}
-                      className="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
-                      title="Delete scan"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => openDeleteModal(scan.id)}
+                    className="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+                    title={isCurrentScan ? "Delete current scan" : "Delete scan"}
+                  >
+                    <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -538,11 +552,27 @@ export function ScanHistory({ currentScanId, onCompare }: ScanHistoryProps) {
         })}
       </div>
 
-      {scans.length >= 10 && (
+      {scans.length >= 20 && (
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
-          Showing 10 most recent scans
+          Showing {scans.length} most recent scans
         </p>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        title="Delete Scan?"
+        message={
+          scanToDelete === currentScanId
+            ? "Are you sure you want to delete the current scan? This will remove all scan data and history for this session."
+            : "Are you sure you want to delete this scan? This action cannot be undone."
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        variant="danger"
+      />
     </div>
   );
 }
