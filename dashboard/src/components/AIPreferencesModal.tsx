@@ -91,7 +91,7 @@ export default function AIPreferencesModal({
           </button>
         </div>
 
-        {/* Warning Banner */}
+        {/* Warning Banner - First Time */}
         {showWarning && (
           <div className="m-4 p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
             <div className="flex items-start gap-3">
@@ -119,6 +119,32 @@ export default function AIPreferencesModal({
                 >
                   I Understand the Risks
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Persistent Acknowledgment - Show when user has previously agreed */}
+        {!showWarning && preferences.acknowledgedRisk && (
+          <div className="m-4 p-3 bg-orange-900/20 border border-orange-700/50 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-orange-300">
+                  <strong>Previously Acknowledged:</strong> You have accepted the risks of ignoring security warnings.
+                  This feature filters AI analysis only—audit results remain visible in the dashboard.
+                  {' '}
+                  <button
+                    onClick={() => {
+                      setShowWarning(true);
+                      const newPrefs = { ...preferences, acknowledgedRisk: false, ignoredAuditors: [] };
+                      setPreferences(newPrefs);
+                    }}
+                    className="underline hover:text-orange-200 transition-colors"
+                  >
+                    Reset preferences
+                  </button>
+                </p>
               </div>
             </div>
           </div>
