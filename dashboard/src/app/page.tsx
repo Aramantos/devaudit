@@ -249,7 +249,10 @@ export default function Dashboard() {
 
             {/* AI Insights Card */}
             <div className="mt-6">
-              <AIInsightsCard scanId={currentScanId || undefined} />
+              <AIInsightsCard
+                scanId={currentScanId || undefined}
+                scanResults={auditData ? { results: auditData } : undefined}
+              />
             </div>
 
             {/* Recommended Actions */}

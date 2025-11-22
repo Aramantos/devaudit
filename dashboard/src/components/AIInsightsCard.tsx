@@ -270,19 +270,20 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
 
             {/* Security Score */}
             <div className="text-center">
-          <div className={`text-3xl font-bold ${getScoreColor(recommendations.security_score)}`}>
-            {recommendations.security_score}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">Security Score</div>
-          {/* Score bar */}
-          <div className="w-20 h-1.5 bg-gray-700 rounded-full mt-2 overflow-hidden">
-            <div
-              className={`h-full bg-gradient-to-r ${getScoreGradient(recommendations.security_score)} transition-all duration-500`}
-              style={{ width: `${recommendations.security_score}%` }}
-            />
+              <div className={`text-3xl font-bold ${getScoreColor(recommendations.security_score)}`}>
+                {recommendations.security_score}
+              </div>
+              <div className="text-xs text-gray-400 mt-1">Security Score</div>
+              {/* Score bar */}
+              <div className="w-20 h-1.5 bg-gray-700 rounded-full mt-2 overflow-hidden">
+                <div
+                  className={`h-full bg-gradient-to-r ${getScoreGradient(recommendations.security_score)} transition-all duration-500`}
+                  style={{ width: `${recommendations.security_score}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Risk Summary */}
       <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
