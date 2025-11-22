@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, AlertCircle, TrendingUp, Shield, Loader2, Info } from 'lucide-react';
+import { Sparkles, AlertCircle, TrendingUp, Shield, Loader2, Info, Settings } from 'lucide-react';
+import AIPreferencesModal from './AIPreferencesModal';
+import { getAIPreferences, filterScanResultsForAI } from '@/lib/aiPreferences';
 
 interface AIRecommendations {
   priority_action: string;
@@ -24,11 +26,19 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
   const [error, setError] = useState<string | null>(null);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [ignoredCount, setIgnoredCount] = useState(0);
 
   // Check if AI is available on mount
   useEffect(() => {
     checkAIStatus();
+    updateIgnoredCount();
   }, []);
+
+  const updateIgnoredCount = () => {
+    const prefs = getAIPreferences();
+    setIgnoredCount(prefs.ignoredAuditors.length);
+  };
 
   const checkAIStatus = async () => {
     try {
@@ -46,6 +56,9 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
     setError(null);
 
     try {
+      // Filter scan results based on user preferences
+      const filteredResults = scanResults ? filterScanResultsForAI(scanResults) : undefined;
+
       const response = await fetch('/api/ai/analyze', {
         method: 'POST',
         headers: {
@@ -53,7 +66,7 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
         },
         body: JSON.stringify({
           scan_id: scanId,
-          scan_results: scanResults,
+          scan_results: filteredResults,
         }),
       });
 
@@ -127,26 +140,51 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
   // Show analyze button if no recommendations yet
   if (!recommendations && !loading) {
     return (
-      <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 backdrop-blur-sm rounded-lg border border-blue-700/50 p-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-blue-500/10 rounded-lg">
-            <Sparkles className="w-6 h-6 text-blue-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-white mb-2">AI Security Insights</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Get intelligent, context-aware security recommendations powered by Gemini 2.0 Flash.
-            </p>
+      <>
+        <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 backdrop-blur-sm rounded-lg border border-blue-700/50 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4 flex-1">
+              <div className="p-3 bg-blue-500/10 rounded-lg">
+                <Sparkles className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-white mb-2">AI Security Insights</h3>
+                <p className="text-gray-400 text-sm mb-4">
+                  Get intelligent, context-aware security recommendations powered by Gemini 2.0 Flash.
+                </p>
+                {ignoredCount > 0 && (
+                  <p className="text-xs text-orange-400 mb-3">
+                    {ignoredCount} {ignoredCount === 1 ? 'auditor' : 'auditors'} excluded from analysis
+                  </p>
+                )}
+                <button
+                  onClick={analyzeWithAI}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Analyze with AI
+                </button>
+              </div>
+            </div>
             <button
-              onClick={analyzeWithAI}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2"
+              onClick={() => setShowPreferences(true)}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0"
+              title="AI Preferences"
             >
-              <Sparkles className="w-4 h-4" />
-              Analyze with AI
+              <Settings className="w-5 h-5 text-gray-400" />
             </button>
           </div>
         </div>
-      </div>
+        <AIPreferencesModal
+          isOpen={showPreferences}
+          onClose={() => setShowPreferences(false)}
+          scanResults={scanResults}
+          onPreferencesChanged={() => {
+            updateIgnoredCount();
+            setRecommendations(null); // Clear recommendations to force re-analysis
+          }}
+        />
+      </>
     );
   }
 
@@ -201,21 +239,37 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
   };
 
   return (
-    <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 backdrop-blur-sm rounded-lg border border-blue-700/50 p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg">
-            <Sparkles className="w-5 h-5 text-white" />
+    <>
+      <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 backdrop-blur-sm rounded-lg border border-blue-700/50 p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white">AI Security Insights</h3>
+              <p className="text-xs text-gray-400">Powered by {recommendations.model}</p>
+              {ignoredCount > 0 && (
+                <p className="text-xs text-orange-400 mt-1">
+                  {ignoredCount} {ignoredCount === 1 ? 'auditor' : 'auditors'} excluded
+                </p>
+              )}
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">AI Security Insights</h3>
-            <p className="text-xs text-gray-400">Powered by {recommendations.model}</p>
-          </div>
-        </div>
 
-        {/* Security Score */}
-        <div className="text-center">
+          <div className="flex items-center gap-3">
+            {/* Settings Button */}
+            <button
+              onClick={() => setShowPreferences(true)}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              title="AI Preferences"
+            >
+              <Settings className="w-5 h-5 text-gray-400" />
+            </button>
+
+            {/* Security Score */}
+            <div className="text-center">
           <div className={`text-3xl font-bold ${getScoreColor(recommendations.security_score)}`}>
             {recommendations.security_score}
           </div>
@@ -283,6 +337,18 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
       >
         Refresh AI Analysis
       </button>
-    </div>
+      </div>
+
+      {/* Preferences Modal */}
+      <AIPreferencesModal
+        isOpen={showPreferences}
+        onClose={() => setShowPreferences(false)}
+        scanResults={scanResults}
+        onPreferencesChanged={() => {
+          updateIgnoredCount();
+          setRecommendations(null); // Clear recommendations to force re-analysis
+        }}
+      />
+    </>
   );
 }
