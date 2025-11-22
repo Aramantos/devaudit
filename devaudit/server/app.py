@@ -600,6 +600,129 @@ async def get_quick_status():
         }
 
 
+@app.post("/api/ai/analyze")
+async def analyze_with_ai(body: dict = Body(...)):
+    """
+    Analyze scan results with Vertex AI for intelligent recommendations.
+
+    This endpoint is optional and only works if:
+    - User has installed devaudit[ai]
+    - User has configured Google Cloud credentials
+    - User explicitly requests AI analysis
+
+    Args:
+        body: Dict containing scan_results or scan_id
+
+    Returns:
+        AI-generated security recommendations
+    """
+    try:
+        from ..vertex_analyzer import analyze_scan_results, is_vertex_available
+
+        if not is_vertex_available():
+            return JSONResponse({
+                "status": "unavailable",
+                "message": "Vertex AI not available. Install with: pip install 'devaudit[ai]'",
+                "enabled": False
+            }, status_code=503)
+
+        # Get scan results
+        scan_id = body.get("scan_id")
+        scan_results = body.get("scan_results")
+
+        # If scan_id provided, fetch from history
+        if scan_id and scan_history:
+            scan_data = scan_history.get_scan(scan_id)
+            if not scan_data:
+                return JSONResponse({
+                    "status": "error",
+                    "message": "Scan not found"
+                }, status_code=404)
+            scan_results = scan_data
+
+        # If no scan results, try to get latest
+        if not scan_results and scan_history:
+            latest = scan_history.get_latest_scan()
+            if latest:
+                scan_results = latest
+            else:
+                return JSONResponse({
+                    "status": "error",
+                    "message": "No scan results available"
+                }, status_code=404)
+
+        # Analyze with Vertex AI
+        recommendations = analyze_scan_results(scan_results)
+
+        if recommendations.get("fallback") or recommendations.get("error"):
+            return JSONResponse({
+                "status": "error",
+                "message": recommendations.get("message", "AI analysis failed"),
+                "error": recommendations.get("error"),
+                "enabled": True
+            }, status_code=500)
+
+        return {
+            "status": "success",
+            "recommendations": recommendations,
+            "enabled": True
+        }
+
+    except ImportError:
+        return JSONResponse({
+            "status": "unavailable",
+            "message": "Vertex AI SDK not installed. Install with: pip install 'devaudit[ai]'",
+            "enabled": False
+        }, status_code=503)
+    except Exception as e:
+        return JSONResponse({
+            "status": "error",
+            "message": str(e),
+            "enabled": True
+        }, status_code=500)
+
+
+@app.get("/api/ai/status")
+async def ai_status():
+    """Check if AI recommendations are available."""
+    try:
+        from ..vertex_analyzer import is_vertex_available
+        available = is_vertex_available()
+
+        if available:
+            # Check if credentials are configured
+            try:
+                import vertexai
+                from ..vertex_analyzer import VertexConfig
+                config = VertexConfig.from_env()
+
+                return {
+                    "available": True,
+                    "configured": True,
+                    "project_id": config["project_id"],
+                    "model": config["model"]
+                }
+            except Exception as e:
+                return {
+                    "available": True,
+                    "configured": False,
+                    "message": "Vertex AI SDK available but not configured",
+                    "error": str(e)
+                }
+        else:
+            return {
+                "available": False,
+                "configured": False,
+                "message": "Install devaudit[ai] to enable AI recommendations"
+            }
+    except ImportError:
+        return {
+            "available": False,
+            "configured": False,
+            "message": "Install devaudit[ai] to enable AI recommendations"
+        }
+
+
 # Mount static files if dashboard exists
 if DASHBOARD_DIR.exists():
     try:

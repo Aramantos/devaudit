@@ -56,6 +56,11 @@ setup(
             'Pillow>=10.0.0',
             'requests>=2.31.0',
         ],
+        'ai': [
+            'google-cloud-aiplatform>=1.36.0',
+            'google-auth>=2.0.0',
+            'google-api-core>=2.0.0',
+        ],
     },
     entry_points={
         "console_scripts": [

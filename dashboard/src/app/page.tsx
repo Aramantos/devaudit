@@ -16,6 +16,7 @@ import { ComparisonView } from '@/components/ComparisonView';
 import { RealtimeStatus } from '@/components/RealtimeStatus';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
+import AIInsightsCard from '@/components/AIInsightsCard';
 import { useWebSocket } from '@/lib/websocket';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 import { Play, Loader, HelpCircle, Info } from 'lucide-react';
@@ -244,6 +245,11 @@ export default function Dashboard() {
             {/* System Auditors Carousel */}
             <div className="mt-6">
               <SystemAuditorCarousel data={auditData} />
+            </div>
+
+            {/* AI Insights Card */}
+            <div className="mt-6">
+              <AIInsightsCard scanId={currentScanId || undefined} />
             </div>
 
             {/* Recommended Actions */}
