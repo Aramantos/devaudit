@@ -12,8 +12,12 @@ Privacy Notes:
 """
 
 import logging
+import warnings
 from typing import Dict, Optional, List
 import json
+
+# Suppress Vertex AI deprecation warnings (cosmetic only, feature still works)
+warnings.filterwarnings('ignore', category=UserWarning, module='vertexai.generative_models')
 
 # Vertex AI imports (optional dependency)
 try:

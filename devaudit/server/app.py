@@ -630,17 +630,20 @@ async def analyze_with_ai(body: dict = Body(...)):
         scan_id = body.get("scan_id")
         scan_results = body.get("scan_results")
 
-        # If scan_id provided, fetch from history
-        if scan_id and scan_history:
-            scan_data = scan_history.get_scan(scan_id)
-            if not scan_data:
-                return JSONResponse({
-                    "status": "error",
-                    "message": "Scan not found"
-                }, status_code=404)
-            scan_results = scan_data
+        # Only fetch from history if scan_results not already provided
+        # (scan_results may be pre-filtered by frontend preferences)
+        if not scan_results:
+            # If scan_id provided, fetch from history
+            if scan_id and scan_history:
+                scan_data = scan_history.get_scan(scan_id)
+                if not scan_data:
+                    return JSONResponse({
+                        "status": "error",
+                        "message": "Scan not found"
+                    }, status_code=404)
+                scan_results = scan_data
 
-        # If no scan results, try to get latest
+        # If still no scan results, try to get latest
         if not scan_results and scan_history:
             latest = scan_history.get_latest_scan()
             if latest:
