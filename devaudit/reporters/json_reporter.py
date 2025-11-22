@@ -51,7 +51,7 @@ class JSONReporter:
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
                 "tool": "DevAudit",
-                "version": "0.2.0",
+                "version": "0.3.0",
                 "format_version": "1.0"
             },
             "summary": self._generate_summary(results),

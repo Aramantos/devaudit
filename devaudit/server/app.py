@@ -15,7 +15,7 @@ from typing import List, Optional
 app = FastAPI(
     title="DevAudit Dashboard",
     description="Local web dashboard for DevAudit",
-    version="0.2.0"
+    version="0.3.0"
 )
 
 # Add CORS middleware (localhost only)
@@ -89,7 +89,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "ok",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "dashboard_ready": DASHBOARD_DIR.exists()
     }
 

@@ -18,10 +18,10 @@ Quick Start:
     devaudit fix-docker        # Fix Docker Desktop UI
 
 Author: John Doyle
-Version: 0.1.0
+Version: 0.3.0
 License: MIT
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 __author__ = "John Doyle"
 __all__ = []

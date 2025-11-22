@@ -33,7 +33,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="devaudit")
+@click.version_option(version="0.3.0", prog_name="devaudit")
 def main():
     """
     DevAudit - Developer Environment Auditing Tool
@@ -192,7 +192,7 @@ def compare(report1, report2):
     console.print(f"\n[bold cyan]Comparing Reports[/bold cyan]\n")
     console.print(f"Report 1: {report1}")
     console.print(f"Report 2: {report2}\n")
-    console.print("[yellow]Compare feature coming in v0.2.0[/yellow]\n")
+    console.print("[yellow]CLI compare feature coming soon (use dashboard for scan comparison)[/yellow]\n")
 
 
 @main.command()
