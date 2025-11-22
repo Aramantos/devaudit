@@ -726,6 +726,135 @@ async def ai_status():
         }
 
 
+@app.post("/api/ai/chat")
+async def chat_with_ai(body: dict = Body(...)):
+    """
+    Conversational AI endpoint for voice assistant.
+
+    Allows users to ask questions about their scan results and get
+    helpful, context-aware responses.
+
+    Args:
+        body: Dict containing:
+            - message: User's question
+            - scan_results: Current scan data (for context)
+            - conversation_history: Previous messages (optional)
+
+    Returns:
+        Conversational response from AI
+    """
+    try:
+        from ..vertex_analyzer import is_vertex_available
+        import vertexai
+        from vertexai.preview import generative_models
+
+        if not is_vertex_available():
+            return JSONResponse({
+                "status": "unavailable",
+                "message": "Vertex AI not available. Install with: pip install 'devaudit[ai]'",
+            }, status_code=503)
+
+        message = body.get("message", "").strip()
+        scan_results = body.get("scan_results", {})
+        conversation_history = body.get("conversation_history", [])
+
+        if not message:
+            return JSONResponse({
+                "status": "error",
+                "message": "No message provided"
+            }, status_code=400)
+
+        # Initialize Vertex AI
+        from ..vertex_analyzer import VertexConfig
+        config = VertexConfig.from_env()
+        vertexai.init(project=config["project_id"], location=config["location"])
+
+        # Build conversational prompt with context
+        system_context = f"""You are a helpful security assistant for DevAudit, a security auditing tool.
+
+The user is asking about their scan results. Here's a summary of their current security status:
+
+SCAN SUMMARY:
+{_format_scan_summary(scan_results)}
+
+Your role:
+- Answer questions about their specific security issues
+- Provide step-by-step guidance for fixes
+- Be conversational and helpful
+- Keep answers concise (2-4 sentences max unless detailed steps needed)
+- If asked about specific drivers/software, provide exact update instructions
+
+User's question: {message}"""
+
+        # Create model and generate response
+        model = generative_models.GenerativeModel(config["model"])
+        response = model.generate_content(
+            [system_context],
+            generation_config=generative_models.GenerationConfig(
+                temperature=0.7,  # More conversational
+                top_p=0.9,
+                max_output_tokens=500,  # Concise responses
+            ),
+            stream=False,
+        )
+
+        return {
+            "status": "success",
+            "response": response.text,
+            "model": config["model"]
+        }
+
+    except ImportError:
+        return JSONResponse({
+            "status": "unavailable",
+            "message": "Vertex AI SDK not installed. Install with: pip install 'devaudit[ai]'",
+        }, status_code=503)
+    except Exception as e:
+        return JSONResponse({
+            "status": "error",
+            "message": str(e),
+        }, status_code=500)
+
+
+def _format_scan_summary(scan_results: dict) -> str:
+    """Format scan results into readable summary for AI context."""
+    if not scan_results or not isinstance(scan_results, dict):
+        return "No scan data available"
+
+    results = scan_results.get("results", {})
+    if not results:
+        return "No scan results"
+
+    summary_lines = []
+
+    # Count issues by severity
+    critical_count = 0
+    high_count = 0
+    issues = []
+
+    for auditor_name, data in results.items():
+        if not isinstance(data, dict):
+            continue
+
+        risk_level = data.get("risk_level", "").lower()
+        if risk_level in ["critical", "high"]:
+            recommendation = data.get("recommendation", "")
+            issues.append(f"- {auditor_name}: {risk_level.upper()} - {recommendation}")
+
+            if risk_level == "critical":
+                critical_count += 1
+            elif risk_level == "high":
+                high_count += 1
+
+    summary_lines.append(f"Total Issues: {critical_count} critical, {high_count} high")
+
+    if issues:
+        summary_lines.append("\nKey Issues:")
+        summary_lines.extend(issues[:5])  # Top 5 issues
+
+    return "\n".join(summary_lines) if summary_lines else "All systems healthy"
+
+
 # Mount static files if dashboard exists
 if DASHBOARD_DIR.exists():
     try:

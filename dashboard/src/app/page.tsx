@@ -17,9 +17,10 @@ import { RealtimeStatus } from '@/components/RealtimeStatus';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
 import AIInsightsCard from '@/components/AIInsightsCard';
+import VoiceAssistant from '@/components/VoiceAssistant';
 import { useWebSocket } from '@/lib/websocket';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
-import { Play, Loader, HelpCircle, Info } from 'lucide-react';
+import { Play, Loader, HelpCircle, Info, Mic } from 'lucide-react';
 
 export default function Dashboard() {
   const [auditData, setAuditData] = useState<any>(null);
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [currentScanId, setCurrentScanId] = useState<string | null>(null);
   const [comparisonScanIds, setComparisonScanIds] = useState<{ id1: string; id2: string } | null>(null);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
   const [isHistoricalData, setIsHistoricalData] = useState(false);
   const [scanTimestamp, setScanTimestamp] = useState<string | null>(null);
   const { connected, lastMessage, connect } = useWebSocket();
@@ -383,6 +385,27 @@ export default function Dashboard() {
         isOpen={showKeyboardHelp}
         onClose={() => setShowKeyboardHelp(false)}
       />
+
+      {/* Voice Assistant */}
+      <VoiceAssistant
+        isOpen={showVoiceAssistant}
+        onClose={() => setShowVoiceAssistant(false)}
+        scanResults={auditData ? { results: auditData } : null}
+      />
+
+      {/* Floating Microphone Button - Only show when scan results available */}
+      {auditData && (
+        <button
+          onClick={() => setShowVoiceAssistant(true)}
+          className="fixed bottom-6 right-6 p-4 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 z-40 group"
+          title="Ask AI Assistant"
+        >
+          <Mic className="w-6 h-6" />
+          <span className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            Ask AI about your scan
+          </span>
+        </button>
+      )}
     </div>
   );
 }

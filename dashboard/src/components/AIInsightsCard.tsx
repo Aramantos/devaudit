@@ -142,6 +142,22 @@ export default function AIInsightsCard({ scanId, scanResults }: AIInsightsCardPr
     return (
       <>
         <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 backdrop-blur-sm rounded-lg border border-blue-700/50 p-6">
+          {/* Privacy Disclaimer */}
+          <div className="mb-4 p-3 bg-orange-900/20 border border-orange-700/50 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-orange-300">
+                  <strong>Privacy Notice:</strong> AI analysis sends your scan data to Google Cloud (Vertex AI).
+                  This data leaves your machine and is processed by Google. See{' '}
+                  <a href="/PRIVACY.md" target="_blank" className="underline hover:text-orange-200">
+                    Privacy Policy
+                  </a>.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4 flex-1">
               <div className="p-3 bg-blue-500/10 rounded-lg">
