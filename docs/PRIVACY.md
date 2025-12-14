@@ -8,6 +8,7 @@ DevAudit is committed to protecting your privacy. This policy explains what data
 
 - ✅ **Core scanning is 100% local** - no data leaves your machine
 - ✅ **No telemetry, tracking, or analytics**
+- ✅ **Chat history stored locally** - conversations saved in your browser only
 - ⚠️ **AI features send data to Google Cloud** (optional, opt-in only)
 - ✅ **You control your data** - it's your Google Cloud project
 - ✅ **No third-party sharing** (except Google Cloud for AI features)
@@ -96,6 +97,26 @@ When you click the microphone icon and speak:
 - **Scan history:** `~/.devaudit/history/` (Linux/Mac) or `%APPDATA%\devaudit\history\` (Windows)
 - **AI preferences:** Browser localStorage (e.g., ignored auditors)
 - **Dashboard settings:** Browser localStorage (theme, keyboard shortcuts)
+- **Chat history:** Browser localStorage (voice assistant conversations)
+
+**Chat History (100% Local):**
+
+When you use the voice assistant, your conversation is automatically saved in your browser's localStorage:
+
+- ✅ **Stays on your device** - Chat history never leaves your machine
+- ✅ **Not sent to any server** - Unlike messages sent to AI, the history itself is only stored locally
+- ✅ **Persists across sessions** - Access past conversations anytime
+- ✅ **Full control** - Delete individual chats or clear all history with one click
+- ✅ **Export/Import** - Download your chat history as JSON for backup or transfer
+
+**Important:** While chat history is stored locally, remember that each individual message you send during a conversation is still transmitted to Google Cloud Vertex AI for processing (as explained in section 1.3). The local history is simply a record of those conversations.
+
+**To manage chat history:**
+1. Open the voice assistant (microphone button)
+2. Click the "History" icon in the header
+3. View, load, or delete past conversations
+4. Export history to JSON file for backup
+5. Import previously exported history
 
 **You can delete any of this data at any time.**
 
