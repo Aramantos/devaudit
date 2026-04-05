@@ -61,7 +61,5 @@ yarn-debug.log*
 yarn-error.log*
 
 # Claude session data
-.claude/
 
 # Private/personal records
-private/
