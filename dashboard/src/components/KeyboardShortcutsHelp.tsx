@@ -7,7 +7,8 @@ interface KeyboardShortcutsHelpProps {
 }
 
 export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelpProps) {
-  const modKey = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl';
+  // navigator does not exist during Next.js static prerender - default to Ctrl.
+  const modKey = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl';
 
   const shortcuts = [
     {

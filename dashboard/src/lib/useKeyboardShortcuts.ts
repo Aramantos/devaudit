@@ -43,8 +43,10 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]) {
   }, [handleKeyDown]);
 }
 
-// Platform-specific modifier key display
+// Platform-specific modifier key display.
+// navigator does not exist during Next.js static prerender - default to Ctrl.
 export function getModifierKey(): string {
+  if (typeof navigator === 'undefined') return 'Ctrl';
   return navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl';
 }
 
