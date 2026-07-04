@@ -14,6 +14,12 @@ class MockAuditor(BaseAuditor):
             "findings": []
         }
 
+    def is_installed(self):
+        return True
+
+    def get_version(self):
+        return "0.0.0-test"
+
 
 def test_base_auditor_initialization():
     """Test that BaseAuditor can be initialized."""

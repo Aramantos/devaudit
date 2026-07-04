@@ -126,22 +126,13 @@ For personal use, you'll likely stay within Google Cloud's free tier.
 
 ## 🛠️ Configuration
 
-### Default Configuration
+### Configuration
 
-DevAudit shares configuration with Project Freya:
-
-```python
-PROJECT_ID = "artful-winter-473414-q1"
-LOCATION = "us-central1"
-MODEL = "gemini-2.0-flash"
-```
-
-### Custom Configuration
-
-Override defaults with environment variables:
+AI features run against YOUR own Google Cloud project. There is no default
+project baked in - `DEVAUDIT_VERTEX_PROJECT` is required:
 
 ```bash
-# Use a different GCP project
+# Required: your own GCP project
 export DEVAUDIT_VERTEX_PROJECT="my-project-id"
 
 # Use a different region

@@ -30,19 +30,34 @@ except ImportError:
 
 
 class VertexConfig:
-    """Configuration for Vertex AI integration."""
+    """Configuration for Vertex AI integration.
 
-    # Default to Project Freya's config (can be overridden)
-    PROJECT_ID = "artful-winter-473414-q1"
+    There is deliberately NO default project: AI features run against the
+    user's OWN Google Cloud project, so DEVAUDIT_VERTEX_PROJECT must be set
+    explicitly. A baked-in default would silently route scan data somewhere
+    the user never chose.
+    """
+
     LOCATION = "us-central1"
     MODEL = "gemini-2.0-flash"  # Fast, cost-effective
 
     @classmethod
     def from_env(cls):
-        """Load config from environment variables if available."""
+        """Load config from environment variables.
+
+        Raises:
+            ValueError: If DEVAUDIT_VERTEX_PROJECT is not set.
+        """
         import os
+        project_id = os.getenv("DEVAUDIT_VERTEX_PROJECT")
+        if not project_id:
+            raise ValueError(
+                "DEVAUDIT_VERTEX_PROJECT is not set. DevAudit's AI features use "
+                "YOUR own Google Cloud project - set DEVAUDIT_VERTEX_PROJECT to "
+                "your GCP project ID (see docs/AI_INSIGHTS.md for setup)."
+            )
         return {
-            "project_id": os.getenv("DEVAUDIT_VERTEX_PROJECT", cls.PROJECT_ID),
+            "project_id": project_id,
             "location": os.getenv("DEVAUDIT_VERTEX_LOCATION", cls.LOCATION),
             "model": os.getenv("DEVAUDIT_VERTEX_MODEL", cls.MODEL),
         }
