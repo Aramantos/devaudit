@@ -31,8 +31,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Get dashboard directory (go up to project root: app.py -> server -> devaudit -> project root)
-DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard" / "dist"
+def _resolve_dashboard_dir() -> Path:
+    """Package-internal copy first (what ships in the wheel, via
+    scripts/prepare_package_assets.py), repo-root build second (source
+    checkout / editable install where the copy step hasn't run)."""
+    packaged = Path(__file__).parent.parent / "dashboard" / "dist"
+    if packaged.is_dir():
+        return packaged
+    return Path(__file__).parent.parent.parent / "dashboard" / "dist"
+
+
+DASHBOARD_DIR = _resolve_dashboard_dir()
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -600,12 +609,29 @@ async def get_quick_status():
         }
 
 
+def ai_features_enabled() -> bool:
+    """AI features are OFF by default (decision 2026-07-04): they are a
+    user-facing opt-in, not needed for the core scan/dashboard loop, and the
+    underlying SDK path needs migrating before the feature is trustworthy
+    again. Enable with DEVAUDIT_ENABLE_AI=1 (plus DEVAUDIT_VERTEX_PROJECT)."""
+    import os
+    return os.getenv("DEVAUDIT_ENABLE_AI", "").strip().lower() in ("1", "true", "yes")
+
+
+_AI_DISABLED_MESSAGE = (
+    "AI features are disabled in this build. They are optional and opt-in: "
+    "set DEVAUDIT_ENABLE_AI=1 and DEVAUDIT_VERTEX_PROJECT=<your own GCP "
+    "project> to enable them."
+)
+
+
 @app.post("/api/ai/analyze")
 async def analyze_with_ai(body: dict = Body(...)):
     """
     Analyze scan results with Vertex AI for intelligent recommendations.
 
     This endpoint is optional and only works if:
+    - AI features are enabled (DEVAUDIT_ENABLE_AI=1; off by default)
     - User has installed devaudit[ai]
     - User has configured Google Cloud credentials
     - User explicitly requests AI analysis
@@ -616,6 +642,13 @@ async def analyze_with_ai(body: dict = Body(...)):
     Returns:
         AI-generated security recommendations
     """
+    if not ai_features_enabled():
+        return JSONResponse({
+            "status": "disabled",
+            "message": _AI_DISABLED_MESSAGE,
+            "enabled": False
+        }, status_code=503)
+
     try:
         from ..vertex_analyzer import analyze_scan_results, is_vertex_available
 
@@ -688,6 +721,12 @@ async def analyze_with_ai(body: dict = Body(...)):
 @app.get("/api/ai/status")
 async def ai_status():
     """Check if AI recommendations are available."""
+    if not ai_features_enabled():
+        return {
+            "available": False,
+            "configured": False,
+            "message": _AI_DISABLED_MESSAGE
+        }
     try:
         from ..vertex_analyzer import is_vertex_available
         available = is_vertex_available()
@@ -743,6 +782,12 @@ async def chat_with_ai(body: dict = Body(...)):
     Returns:
         Conversational response from AI
     """
+    if not ai_features_enabled():
+        return JSONResponse({
+            "status": "disabled",
+            "message": _AI_DISABLED_MESSAGE,
+        }, status_code=503)
+
     try:
         from ..vertex_analyzer import is_vertex_available
         import vertexai

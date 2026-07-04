@@ -62,6 +62,18 @@ export DEVAUDIT_VERTEX_LOCATION="us-central1"
 export DEVAUDIT_VERTEX_MODEL="gemini-2.0-flash"
 ```
 
+### Step 3: Turn the feature on
+
+AI features are disabled by default, even with the `[ai]` extra installed:
+
+```bash
+export DEVAUDIT_ENABLE_AI=1
+```
+
+Both variables are required: `DEVAUDIT_ENABLE_AI=1` switches the endpoints on,
+and `DEVAUDIT_VERTEX_PROJECT` names YOUR project. Without either one, the AI
+endpoints answer with a clear "disabled" message and nothing leaves your machine.
+
 ## 🚀 Usage
 
 ### In the Dashboard

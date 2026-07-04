@@ -1,508 +1,211 @@
 # DevAudit Roadmap
 
-This roadmap outlines our vision for evolving DevAudit from a developer environment auditor into a **comprehensive personal security assistant**. All features align with our core principles: **Privacy, Education, and Empowerment**.
+This roadmap tracks DevAudit's evolution from a developer environment auditor into a personal security assistant. All features align with our core principles: **Privacy, Education, and Empowerment**.
 
 ---
 
 ## Vision Evolution
 
 ### From: Developer-Focused Auditor
-- Package dependency scanning (Python, Node.js, Go)
+- Package dependency scanning (Python, Node.js, Docker, Go)
 - Security vulnerability detection (CVEs)
 - Docker cleanup optimization
 
 ### To: Personal Security Assistant
-- **System-wide security monitoring** (BIOS, OS, drivers, antivirus)
+- **System-wide security monitoring** (BIOS, OS, drivers, antivirus, disk health, backups, encryption, firewall)
+- **Hardware diagnostics** (reading the fault signals your hardware already emits, and teaching you how to isolate them)
 - **Educational security platform** (teaching, not just alerting)
 - **Privacy-first multi-device orchestration** (Raspberry Pi hub)
 - **Honest risk assessment** (no fear tactics or inflated scores)
 
 ---
 
-## Release Timeline
+## Where Things Actually Stand
 
-| Version | Theme | Target | Status |
-|---------|-------|--------|--------|
-| v0.1.0 | Developer Environment Auditing | Jan 2025 | ✅ Released |
-| v0.2.x | Interactive Dashboard & History | Jan 2025 | ✅ Released |
-| **v0.3.0** | System-Wide Scanning | Feb 2025 | 🚧 In Planning |
-| **v0.4.0** | Educational Library | Mar 2025 | 📋 Planned |
-| **v0.5.0** | Remediation Engine | Apr 2025 | 📋 Planned |
-| **v0.6.0** | Multi-Device Support | May 2025 | 📋 Planned |
-| **v0.7.0** | Automation & Scheduling | Jun 2025 | 📋 Planned |
-| **v0.8.0** | Notifications & Alerts | Jul 2025 | 📋 Planned |
-| **v0.9.0** | Polish & Performance | Aug 2025 | 📋 Planned |
-| **v1.0.0** | Cloud Tiers (Optional) | Sep 2025 | 📋 Planned |
+This section exists because an earlier version of this roadmap listed calendar dates and "Released" status for versions that were never published. Corrected here.
+
+- **PyPI (`pip install devaudit`) has only v0.1.0**, published November 2025. It is the original CLI-only package/dependency auditor. No dashboard, no system auditors, no education library, no tags beyond it exist in this repo's history.
+- **This source tree is at v0.3.x** and includes the dashboard, 14 auditors (6 package, 8 system), scan history/comparison/trends, the educational content library, and optional AI insights, all working, none of it released to PyPI yet.
+- **v0.4.0 will be the first full release**: hardware diagnostics plus shipping everything above.
+- **Everything after v0.4.0 is evidence-gated, not date-gated.** A stage ships when the one before it has proven useful in real, ongoing use, not on a calendar. The version numbers below are a sequence, not a schedule.
+
+| Version | Theme | Status |
+|---------|-------|--------|
+| v0.1.0 | Developer Environment Auditing | ✅ Released (PyPI, Nov 2025) |
+| v0.2.x – v0.3.x | Dashboard, System-Wide Scanning, Educational Library | ✅ Built, unreleased (this source tree) |
+| **v0.4.0** | **Hardware Diagnostics + first full release** | 🚧 In development |
+| v0.5+ | Remediation Engine, Multi-Device Support, Automation & Scheduling, Notifications & Alerts, Polish/i18n/Accessibility | 📋 Planned, evidence-gated |
+| v1.0.0 | Cloud Tiers (Optional) | 📋 Planned, evidence-gated |
+| Beyond v1.0 | Community plugins, network/IoT scanning, password manager audit, local-only ML | 💭 Ideas, not committed |
 
 ---
 
-## v0.3.0: System-Wide Scanning
+## Built, Unreleased: Dashboard & System-Wide Scanning
 
-**Theme:** Beyond packages - audit the entire system
+**Theme:** Beyond packages, audit the entire system
 
-**Target:** February 2025
+This is all real and working in the source tree today. It has not shipped to PyPI.
 
-### New Scanners
+### System Auditors (8, all built)
 
 #### 1. BIOS/UEFI Auditor
-- Detect current BIOS version
-- Check manufacturer for latest version
-- Identify security patches in updates
-- Show release notes and change history
-- Risk assessment (Low/Medium/High)
-
-**Educational Layer:**
-- "What is BIOS?" explainer
-- "Why update BIOS?" with real examples
-- "When is it safe to skip?" guidance
-- Step-by-step update instructions per manufacturer
+- Detects current BIOS version, checks for known updates, flags security patches
+- Educational layer: what BIOS is, why (and when not) to update, per-manufacturer instructions
 
 #### 2. Operating System Auditor
-- Windows Update status
-- macOS Software Update status
-- Linux package manager updates (apt, yum, pacman)
-- Pending security patches
-- Deferred updates (with age tracking)
-- End-of-life OS detection
-
-**Educational Layer:**
-- "Why are OS updates important?"
-- "What is a security patch?"
-- Risks of outdated OS versions
-- How to enable auto-updates safely
+- Windows Update, macOS Software Update, Linux package manager status
+- Pending security patches, deferred updates, end-of-life OS detection
 
 #### 3. Antivirus/Security Software Auditor
-- Windows Defender status (enabled/disabled)
-- Antivirus definition age
-- Real-time protection status
-- Scheduled scan status
-- Quarantine summary
-
-**Educational Layer:**
-- "What does antivirus actually do?"
-- "How often should definitions update?"
-- "Is Windows Defender enough?" (honest answer: often yes)
-- Third-party AV comparison (unbiased)
+- Windows Defender status, definition age, real-time protection status
 
 #### 4. Driver Auditor
-- Identify outdated drivers (graphics, network, chipset)
-- Check manufacturer sites for updates
-- Flag critical security drivers
-- Show performance improvements in updates
-
-**Educational Layer:**
-- "What are drivers?"
-- "Which drivers matter most?"
-- "Risks of outdated drivers"
-- Safe driver update practices
+- Identifies outdated graphics/network/chipset drivers, flags critical security drivers
 
 #### 5. Disk Health Auditor
-- SMART status for HDDs/SSDs
-- Warning signs (reallocated sectors, etc.)
-- Predicted failure timeline
-- Backup urgency assessment
-
-**Educational Layer:**
-- "How do hard drives fail?"
-- "What is SMART?"
-- "When to replace a drive?"
-- Backup best practices
+- SMART status for HDDs/SSDs, warning signs (reallocated sectors, etc.), backup urgency
 
 #### 6. Backup Auditor
-- Detect backup software (Time Machine, Windows Backup, etc.)
-- Last backup timestamp
-- Backup destination (local/cloud)
-- Backup verification status
-- Critical file coverage check
-
-**Educational Layer:**
-- "3-2-1 backup rule" explained
-- "Local vs cloud backups"
-- "How to test backup restores"
-- Recommended backup tools
+- Detects backup software, last backup timestamp, destination, verification status
 
 #### 7. Encryption Auditor
-- BitLocker status (Windows)
-- FileVault status (macOS)
-- LUKS status (Linux)
-- Full disk vs file-level encryption
-- TPM module detection
-
-**Educational Layer:**
-- "What is encryption?"
-- "Why encrypt your disk?"
-- "Performance impact" (spoiler: minimal)
-- How to enable encryption safely
+- BitLocker (Windows), FileVault (macOS), LUKS (Linux) status, TPM detection
 
 #### 8. Firewall Auditor
-- Windows Firewall status
-- macOS Firewall status
-- UFW/iptables status (Linux)
-- Open ports detection
-- Suspicious listening services
+- Windows/macOS firewall status, UFW/iptables (Linux), open port detection
 
-**Educational Layer:**
-- "What does a firewall do?"
-- "Do I need a third-party firewall?" (usually no)
-- Port security basics
-- Safe port configurations
+Every auditor above returns a risk level (Low/Medium/High) plus educational content, never an inflated score.
 
-### Backend Changes
-- New auditor base class with educational metadata
-- Parallel scanning for faster results
-- Caching to avoid redundant checks
-- Risk scoring system (honest, not inflated)
+### Dashboard (built)
+- Scan history with a timeline view, side-by-side comparison, trend indicators
+- One-click package upgrades, CVE severity ratings
+- Real-time WebSocket updates during a scan
+- Keyboard shortcuts, dark mode, export to JSON/CSV
 
-### Dashboard Updates
-- New "System Health" overview card
-- Expandable details for each system component
-- "Learn More" links in every finding
-- Risk level color coding (Low/Medium/High)
+### Educational Library (built)
+- A `docs/concepts/` guide per topic (BIOS, CVEs, backups, disk health, encryption, firewall, driver updates, OS updates, docker cleanup, dependencies, antivirus): what it is, why it matters, how to fix it
+- Inline "what is this?" panels in the dashboard for every finding
 
-### CLI Updates
-```bash
-devaudit scan --system-only    # Only system scans
-devaudit scan --packages-only  # Only package scans
-devaudit scan --all           # Everything (default)
-```
+**Not yet built** (see v0.5+ below): beginner/intermediate/advanced content tiers, interactive walkthroughs, curated external resource links.
 
 ---
 
-## v0.4.0: Educational Library
+## v0.4.0: Hardware Diagnostics + First Full Release
 
-**Theme:** Teach users about their security
+**Theme:** Read the fault signals your hardware already emits, and teach fault isolation
 
-**Target:** March 2025
+This is the next thing being built. Two parts: the harvest-only diagnostics, and actually shipping a real PyPI release of everything above.
 
-### Documentation Site (`docs/`)
-- Comprehensive educational content
-- "What is X?" for every scan type
-- "Why does X matter?" with real-world examples
-- "How do I fix X?" step-by-step guides
-- Glossary of security terms
+### Hardware Diagnostics (harvest-only auditors)
 
-### In-Dashboard Education
-- Inline "?" icons with tooltips
-- "Learn More" expandable sections
-- Related articles suggestions
-- Beginner/Intermediate/Advanced content levels
+- **SMART / storage health** - the drive's own reliability counters (reallocated sectors, pending sectors, uncorrectable errors)
+- **Windows hardware error log (WHEA)** - CPU, memory, and PCIe error events
+- **Disk/controller I/O event log** - interface and transport-level errors (the signal a failing cable or enclosure produces, distinct from a failing drive)
+- **RAM diagnostic results** - Windows Memory Diagnostic / memtest output, surfaced and explained
+- **Device problem states** - Device Manager error codes and what they mean
 
-### Educational Content
-- **Basics:** BIOS, drivers, patches, encryption
-- **Intermediate:** CVEs, attack vectors, threat models
-- **Advanced:** Defense-in-depth, zero-trust, hardening
+**Education-first framing, not a verdict engine (yet).** Phase 1 harvests and explains: it shows you the raw signal and teaches you what it means. Example: rising interface/CRC errors alongside a flat reallocated-sector count points at the cable or enclosure, not the drive itself, and the auditor explains that distinction rather than just flagging "disk problem."
 
-### Interactive Tutorials
-- "Your First Scan" walkthrough
-- "Understanding Your Risk Score"
-- "How to Update Safely"
-- "Setting Up Raspberry Pi Hub"
+A **later phase** adds:
+- A fault-isolation synthesis verdict that reasons across signals (not just reporting them individually)
+- Periodic scheduled scans, so a slow-building fault gets caught before it becomes a failure
 
-### External Resources
-- Curated links to official docs
-- Vendor-specific guides
-- Community resources
-- Security news and advisories
+### First Full Release
+- Fix packaging so `pip install devaudit` actually installs the current feature set
+- CI for the test suite
+- Tag the release, publish to PyPI
+- Everything under "Built, Unreleased" above ships as part of this
 
 ---
 
-## v0.5.0: Remediation Engine
+## v0.5+: The Original Plan (evidence-gated, no dates)
 
+These are the features from the earlier roadmap that haven't been built yet. They're still the plan. What's changed is how they ship: each one is built when the stage before it has proven useful in real use, not on a fixed monthly cadence.
+
+### Educational Library Expansion
+- Beginner/Intermediate/Advanced content depth per topic
+- Interactive tutorials ("Your First Scan", "Understanding Your Risk Score", "Setting Up a Raspberry Pi Hub")
+- Curated external resources (vendor docs, security advisories)
+- In-dashboard "Learn More" expandable sections beyond the current inline panels
+
+### Remediation Engine
 **Theme:** From detection to action
 
-**Target:** April 2025
+- One-click remediations (apply Windows Updates, update packages, enable Defender/firewall)
+- Guided remediations (BIOS update walkthrough per manufacturer, driver update wizard, encryption enablement)
+- Remediation safety: pre-change checkpoint, rollback instructions, dry-run/test mode
+- Batch operations ("Fix All Low-Risk Items")
+- Remediation history: what was fixed, when, before/after comparison
 
-### One-Click Remediations
-- Apply Windows Updates
-- Update outdated packages
-- Enable Windows Defender
-- Enable firewall
-- Schedule automatic scans
+### Multi-Device Support
+**Theme:** One dashboard for every device you own
 
-### Guided Remediations
-- BIOS update walkthrough (per manufacturer)
-- Driver update wizard
-- Backup setup wizard
-- Encryption enablement guide
-- Safe system hardening
+- **Hub:** central dashboard (Raspberry Pi or main computer)
+- **Agents:** lightweight scanners on other devices, reporting to the hub over the local network only, no cloud
+- Aggregate view across devices, per-device drill-down, weakest-link identification
+- Explicit device enrollment (no stealth), visible status indicator on agents, easy unenrollment
+- Pre-configured Raspberry Pi hub image with a setup wizard
 
-### Remediation Safety
-- Pre-change system checkpoint
-- Rollback instructions
-- "What could go wrong?" warnings
-- Test mode (dry-run)
+### Automation & Scheduling
+- Scheduled scans (daily/weekly/custom cron), smart scheduling (scan when idle)
+- Automated remediation for low-risk fixes, approval required for medium/high-risk
+- Continuous background health monitoring with trend analysis
+- Periodic backup verification (test restores, staleness alerts)
 
-### Batch Operations
-- "Fix All Low-Risk Items"
-- "Update All Packages"
-- "Enable All Security Features"
-- Smart dependency resolution
+### Notifications & Alerts
+- Desktop notifications for scan completion, critical vulnerabilities, hardware failure predictions
+- Optional email alerts (weekly health reports, critical summaries)
+- Severity-based filtering and deduplication (no alert spam)
 
-### Remediation History
-- Track what was fixed and when
-- Before/after comparisons
-- Success/failure logging
-- Rollback capability
-
----
-
-## v0.6.0: Multi-Device Support
-
-**Theme:** One dashboard for all your devices
-
-**Target:** May 2025
-
-### Architecture
-- **Hub:** Central dashboard (Raspberry Pi or main computer)
-- **Agents:** Lightweight scanners on other devices
-- **Communication:** Encrypted local network only (no cloud)
-
-### Agent Features
-- Minimal resource usage
-- Push scan results to hub
-- Receive remediation commands
-- Transparent status indicator ("Reporting to Hub")
-
-### Hub Dashboard
-- Aggregate view of all devices
-- Per-device drill-down
-- Cross-device comparisons
-- Weakest-link identification
-
-### Device Management
-- Add/remove devices
-- Assign device names/roles
-- Group devices (Personal/Work/Family)
-- Per-device scan scheduling
-
-### Privacy Guardrails
-- Explicit device enrollment (no stealth)
-- Visible status indicator on agents
-- Easy unenrollment
-- Audit log of all hub actions
-
-### Raspberry Pi Hub
-- Pre-configured Pi image for easy setup
-- Web-based setup wizard
-- Auto-discovery of local devices
-- Mobile-optimized interface
+### Polish, Accessibility, and Internationalization
+- Faster scans (caching, parallelization), reduced memory footprint
+- Onboarding flow, contextual help
+- Screen reader support, high contrast mode, keyboard-only navigation, WCAG 2.1 AA compliance
+- Multi-language support for the dashboard and educational content
+- Automated test suite, integration tests, third-party security audit
 
 ---
 
-## v0.7.0: Automation & Scheduling
-
-**Theme:** Set it and forget it
-
-**Target:** June 2025
-
-### Scheduled Scans
-- Daily/weekly/monthly intervals
-- Custom cron schedules
-- Smart scheduling (scan when idle)
-- Wake-on-LAN for sleeping devices
-
-### Automated Remediation
-- Auto-apply low-risk fixes
-- Require approval for medium/high-risk
-- Notification before auto-fix
-- Rollback if issues detected
-
-### Health Monitoring
-- Continuous background checks
-- Alert on critical changes
-- Trend analysis over time
-- Predictive failure warnings
-
-### Backup Verification
-- Periodic backup integrity checks
-- Test restore simulations
-- Alert if backups are stale
-- Verify backup coverage
-
-### Update Management
-- Defer updates until convenient time
-- Group updates for batch install
-- Test updates on canary device first
-- Staged rollout for multi-device
-
----
-
-## v0.8.0: Notifications & Alerts
-
-**Theme:** Stay informed without being spammed
-
-**Target:** July 2025
-
-### Desktop Notifications
-- Scan completion alerts
-- Critical vulnerability warnings
-- Update available notifications
-- Hardware failure predictions
-
-### Mobile Notifications (Future)
-- Push notifications to phone
-- Critical-only mode
-- Quiet hours respect
-- Per-device notification settings
-
-### Email Alerts (Optional)
-- Weekly health reports
-- Critical issue summaries
-- Trend reports (improving/degrading)
-- Custom alert rules
-
-### Smart Alerting
-- Severity-based filtering (only critical)
-- Deduplication (don't spam same issue)
-- Snooze options for non-urgent
-- Alert fatigue prevention
-
-### Notification Preferences
-- Per-scan-type enable/disable
-- Quiet hours configuration
-- Alert frequency limits
-- Test notifications
-
----
-
-## v0.9.0: Polish & Performance
-
-**Theme:** Production-ready stability
-
-**Target:** August 2025
-
-### Performance Optimization
-- Faster scans (caching, parallelization)
-- Reduced memory footprint
-- Dashboard load time optimization
-- Efficient storage (compression)
-
-### User Experience Polish
-- Onboarding flow for new users
-- Contextual help throughout
-- Keyboard shortcut expansion
-- Mobile-responsive perfection
-
-### Stability & Reliability
-- Comprehensive error handling
-- Graceful degradation
-- Automatic crash recovery
-- Health self-monitoring
-
-### Accessibility
-- Screen reader support
-- High contrast mode
-- Keyboard-only navigation
-- WCAG 2.1 AA compliance
-
-### Internationalization (i18n)
-- Multi-language support (initial: EN, ES, FR, DE)
-- Localized educational content
-- Region-specific recommendations
-- Currency localization for pricing
-
-### Testing & Quality
-- Automated test suite
-- Integration tests
-- Performance benchmarks
-- Security audit (third-party)
-
----
-
-## v1.0.0: Cloud Tiers (Optional)
+## v1.0.0: Cloud Tiers (Optional, evidence-gated)
 
 **Theme:** Remote access without sacrificing privacy
 
-**Target:** September 2025
-
-### Local Mode (FREE - Forever)
-✅ Everything in v0.1-v0.9
+### Local Mode (Free, Forever)
+✅ Everything above
 ✅ Runs entirely on your machine(s)
-✅ No cloud dependencies
-✅ No data leaves your network
+✅ No cloud dependencies, no data leaves your network
 ✅ No subscription required
 
-### Ephemeral Cloud Mode (Paid - Optional)
-**Price:** $5/month or $50/year
+### Ephemeral Cloud Mode (Paid, Optional)
+**Target price:** ~$5/month
 
-**What it adds:**
-- 🌐 Access dashboard from anywhere (internet)
-- 🌐 WebSocket streaming over HTTPS
-- 🌐 Mobile app for iOS/Android
-- 🌐 **Zero data storage** (ephemeral only)
-- 🌐 Secure tunnel to your local device
+- Access dashboard from anywhere, WebSocket streaming over HTTPS
+- Zero data storage (ephemeral only), end-to-end encrypted tunnel
+- We can't see your scans; cancel anytime, full local mode restored
 
-**Privacy:**
-- ✅ Data never stored in cloud
-- ✅ End-to-end encrypted tunnel
-- ✅ We can't see your scans
-- ✅ Cancel anytime, full local mode restored
+**Perfect for:** remote workers checking a home network, travellers monitoring their devices.
 
-**Perfect for:**
-- Remote workers checking home network
-- Travelers monitoring their devices
-- Mobile-first users
+### Encrypted Cloud Mode (Paid, Optional)
+**Target price:** ~$10/month
 
-### Encrypted Cloud Mode (Paid - Optional)
-**Price:** $10/month or $100/year
+- Everything in Ephemeral, plus historical scan storage (end-to-end encrypted)
+- Cross-device sync, long-term trend analysis
+- You hold the encryption keys; we can't decrypt your data; lose the key, lose the data (we can't recover it)
 
-**What it adds:**
-- 🔐 All Ephemeral features +
-- 🔐 Historical scan storage (E2E encrypted)
-- 🔐 Cross-device sync
-- 🔐 Long-term trend analysis
-- 🔐 **You hold encryption keys**
-- 🔐 Scheduled scans (run even when offline)
+**Perfect for:** security-conscious individuals, multi-device power users.
 
-**Privacy:**
-- ✅ Zero-knowledge architecture
-- ✅ We can't decrypt your data
-- ✅ Keys stored only on your devices
-- ✅ Lose key = lose data (we can't recover)
-- ✅ Export all data anytime
-
-**Perfect for:**
-- Security-conscious individuals
-- Multi-device power users
-- Long-term trend tracking
-
-### Enterprise Mode (Future - On Request)
-- Team dashboards
-- Compliance reporting (SOC 2, HIPAA, etc.)
-- SSO integration
-- Custom retention policies
-- Dedicated support
-- Custom pricing
+### Enterprise Mode (Future, On Request)
+- Team dashboards, compliance reporting (SOC 2, HIPAA, etc.), SSO, custom retention, dedicated support
 
 ---
 
-## Beyond v1.0: Future Ideas
+## Beyond v1.0: Future Ideas (not committed)
 
-### Community Plugins
-- Extensible architecture
-- Custom auditors
-- Third-party integrations
-- Plugin marketplace
-
-### Advanced Features
-- Network scanner (router vulnerabilities)
-- IoT device security
-- Certificate expiration monitoring
-- Password manager integration
-- 2FA audit (which accounts lack it?)
-
-### AI/ML Features (Privacy-Respecting)
-- Anomaly detection (unusual system changes)
-- Predictive failure modeling
-- Smart remediation suggestions
-- Risk scoring improvements
-- **All processing local** (no cloud AI)
-
-### Integration Ecosystem
-- Home automation (Home Assistant, etc.)
-- IT management tools
-- Security information feeds
-- Vendor APIs (Microsoft, Apple, etc.)
+- **Community plugins:** extensible architecture, custom auditors, a plugin marketplace
+- **Network/IoT scanning:** router vulnerabilities, IoT device security, certificate expiration monitoring
+- **Password manager integration:** 2FA audit (which accounts lack it?)
+- **Privacy-respecting AI/ML:** local-only anomaly detection, predictive failure modelling, smarter remediation suggestions, no cloud AI required for this class of feature
+- **Integration ecosystem:** home automation (Home Assistant), IT management tools, vendor APIs
 
 ---
 
@@ -517,106 +220,59 @@ We will **NOT** build:
 ❌ **Intrusion detection** - Out of scope, use dedicated IDS
 ❌ **DRM or licensing enforcement** - We respect user freedom
 
-**Why not?**
-These features either:
-- Enable abuse (surveillance)
-- Require different expertise (malware removal)
-- Conflict with our mission (control vs empowerment)
-- Create liability we can't manage
-
-We stay laser-focused on **education, detection, and empowerment**.
+**Why not?** These features either enable abuse (surveillance), require different expertise (malware removal), conflict with the mission (control vs. empowerment), or create liability we can't manage. We stay focused on education, detection, and empowerment.
 
 ---
 
 ## How We Prioritize
 
-### Feature Decision Framework
+**We say yes if:**
+1. It aligns with the core mission (Privacy, Education, Empowerment)
+2. It's teachable (can we explain it simply?)
+3. It's privacy-respecting (local-first possible?)
+4. It solves a real pain point
+5. We can maintain it long-term
 
-**We Say YES If:**
-1. ✅ Aligns with core mission (Privacy, Education, Empowerment)
-2. ✅ Teachable (can we explain it simply?)
-3. ✅ Privacy-respecting (local-first possible?)
-4. ✅ High user value (solves real pain point)
-5. ✅ Maintainable (we can support it long-term)
-
-**We Say NO If:**
-1. ❌ Enables abuse or surveillance
-2. ❌ Requires compromising privacy
-3. ❌ Feature creep (not core mission)
-4. ❌ Unsustainable complexity
-5. ❌ Vendor lock-in required
+**We say no if:**
+1. It enables abuse or surveillance
+2. It requires compromising privacy
+3. It's feature creep, not core mission
+4. It adds unsustainable complexity
+5. It requires vendor lock-in
 
 ### Community Input
 
-**Want to influence the roadmap?**
-- 💬 GitHub Discussions: Propose features
-- 🐛 GitHub Issues: Report pain points
+Want to influence the roadmap?
+- 💬 GitHub Discussions: propose features
+- 🐛 GitHub Issues: report pain points
 - ⭐ Star features you care about
-- 🗳️ Vote on feature polls
-
-**Top-voted features get prioritized!**
 
 ---
 
 ## Release Philosophy
 
 ### Versioning
-- **Major (v1.0, v2.0):** Big architectural changes
-- **Minor (v0.3, v0.4):** New features, scanners, capabilities
-- **Patch (v0.2.1, v0.2.2):** Bug fixes, small improvements
+- **Major (v1.0, v2.0):** big architectural changes
+- **Minor (v0.4, v0.5):** new features, scanners, capabilities
+- **Patch (v0.1.1, v0.1.2):** bug fixes, small improvements
 
 ### Release Cadence
-- **Minor versions:** Monthly (v0.3, v0.4, etc.)
-- **Patch versions:** As needed (weekly during active development)
-- **Major versions:** When ready (no rush)
+Evidence-gated, not calendar-gated. A version ships when it's proven useful in real, ongoing use, not on a fixed schedule. The earlier version of this roadmap promised monthly releases through 2025; none of those dates were met, which is exactly why this section no longer carries dates.
 
 ### Backwards Compatibility
-- **Local mode:** Never break existing workflows
-- **Data format:** Forward-compatible scan history
-- **API:** Deprecation warnings 2 versions ahead
-- **Config:** Migration tools provided
-
-### Beta Testing
-- **Early access:** GitHub releases
-- **Beta channel:** Opt-in for testing
-- **Feedback:** Issues and discussions
-- **Rewards:** Credit in changelog, early access
+- **Local mode:** never break existing workflows
+- **Data format:** forward-compatible scan history
+- **Config:** migration tools provided when a format changes
 
 ---
 
 ## Get Involved
 
-### Ways to Contribute
-
-**Code:**
-- Implement new auditors
-- Fix bugs
-- Improve performance
-- Write tests
-
-**Documentation:**
-- Educational content
-- How-to guides
-- Translations
-- Video tutorials
-
-**Design:**
-- UI/UX improvements
-- Dashboard components
-- Educational diagrams
-- Branding assets
-
-**Community:**
-- Answer questions
-- Share use cases
-- Write blog posts
-- Spread the word
-
-**Testing:**
-- Beta test new features
-- Report bugs
-- Suggest improvements
-- Cross-platform validation
+**Code:** implement new auditors, fix bugs, improve performance, write tests
+**Documentation:** educational content, how-to guides, translations
+**Design:** UI/UX improvements, dashboard components, educational diagrams
+**Community:** answer questions, share use cases, spread the word
+**Testing:** beta test new features, report bugs, cross-platform validation (this project is Windows-tested; macOS and Linux validation of the system auditors is still needed)
 
 **See:** [CONTRIBUTING.md](CONTRIBUTING.md) for details
 
@@ -624,18 +280,15 @@ We stay laser-focused on **education, detection, and empowerment**.
 
 ## Stay Updated
 
-**Follow the Journey:**
-- ⭐ Star the repo: [github.com/aramantos/devaudit](https://github.com/aramantos/devaudit)
+- ⭐ Star the repo: [github.com/Aramantos/devaudit](https://github.com/Aramantos/devaudit)
 - 📰 Watch releases for updates
 - 💬 Join discussions
 - 🐛 Subscribe to issues you care about
 
-**Questions about the roadmap?**
-- Open a [GitHub Discussion](https://github.com/aramantos/devaudit/discussions)
-- We're transparent about priorities and timelines!
+**Questions about the roadmap?** Open a [GitHub Discussion](https://github.com/Aramantos/devaudit/discussions). We're transparent about priorities, and honest when a prior version of this document wasn't.
 
 ---
 
-*This roadmap is a living document. Dates are estimates and may shift based on community feedback, technical challenges, and available resources.*
+*This roadmap is a living document. It previously carried Jan-Sep 2025 target dates and marked v0.1.0/v0.2.x as "Released" when only v0.1.0 ever was. Corrected here.*
 
-*Last updated: January 2025*
+*Last updated: July 2026*

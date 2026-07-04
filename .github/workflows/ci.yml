@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    # Cross-platform because DevAudit's system auditors shell out to
+    # platform-specific tools (PowerShell/WMI on Windows, apt/ufw/lsblk on
+    # Linux) - a Linux-only CI run would never catch a Windows regression.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package (server + dev extras)
+        run: pip install -e ".[server,dev]"
+
+      - name: Run tests
+        run: pytest tests/ -q
+
+  build-and-verify-wheel:
+    # THE load-bearing job. This repo once shipped ~18 months of wheels that
+    # silently contained no dashboard and no educational content, because
+    # both live outside the devaudit/ package at build time and setuptools
+    # will happily build a "successful" wheel missing them anyway. This job
+    # builds the real wheel the way a release would, then opens it back up
+    # and asserts the content is actually inside - a green wheel-build alone
+    # is not proof of anything.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the dashboard (static export)
+        working-directory: dashboard
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy dashboard + educational content into the package
+        # scripts/prepare_package_assets.py copies dashboard/dist and
+        # docs/concepts INTO devaudit/, which is where setup.py's
+        # package_data (and MANIFEST.in) expect them to be at build time.
+        run: python scripts/prepare_package_assets.py
+
+      - name: Build the wheel
+        run: |
+          pip install build
+          python -m build
+
+      - name: Assert the wheel actually contains the dashboard + educational content
+        # A build that produces a wheel is not the same as a build that
+        # produces a CORRECT wheel - this is the check that would have
+        # caught the 18-month bug on day one.
+        shell: python
+        run: |
+          import glob
+          import sys
+          import zipfile
+
+          wheels = glob.glob("dist/*.whl")
+          if not wheels:
+              sys.exit("FAIL: no wheel found in dist/")
+
+          with zipfile.ZipFile(wheels[0]) as wheel:
+              names = wheel.namelist()
+
+          has_dashboard = "devaudit/dashboard/dist/index.html" in names
+          content_files = [
+              n for n in names
+              if n.startswith("devaudit/educational/content/") and n.endswith(".md")
+          ]
+
+          print(f"wheel: {wheels[0]}")
+          print(f"dashboard index.html present: {has_dashboard}")
+          print(f"educational .md files packaged: {len(content_files)}")
+
+          if not has_dashboard or len(content_files) < 5:
+              sys.exit(
+                  "FAIL: wheel is missing the dashboard build and/or educational "
+                  "content - this is the exact regression that shipped silently "
+                  "for ~18 months. dashboard index.html present="
+                  f"{has_dashboard}, educational .md count={len(content_files)} (need >= 5)."
+              )
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devaudit-wheel
+          path: dist/*.whl
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    # Advisory for now: the dependency floor (setup.py lower bounds) predates
+    # this check and hasn't been reviewed against known CVEs yet. This flips
+    # to blocking (remove continue-on-error) at the v0.4.0 release once that
+    # review has happened.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package + pip-audit
+        run: pip install -e ".[server]" pip-audit
+
+      - name: Audit dependencies
+        run: pip-audit --strict

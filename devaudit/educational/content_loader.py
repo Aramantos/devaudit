@@ -39,10 +39,16 @@ class EducationalContentLoader:
             docs_path: Path to docs/concepts directory. If None, auto-detects.
         """
         if docs_path is None:
-            # Auto-detect: devaudit/educational/content_loader.py -> ../../docs/concepts
             current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent.parent
-            docs_path = project_root / "docs" / "concepts"
+            # Package-internal copy first (ships in the wheel via
+            # scripts/prepare_package_assets.py), repo docs/concepts second
+            # (source checkout where the copy step hasn't run).
+            packaged = current_file.parent / "content"
+            if packaged.is_dir():
+                docs_path = packaged
+            else:
+                project_root = current_file.parent.parent.parent
+                docs_path = project_root / "docs" / "concepts"
 
         self.docs_path = Path(docs_path)
         self._cache: Dict[str, Dict[str, str]] = {}

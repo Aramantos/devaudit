@@ -20,10 +20,17 @@ setup(
     url="https://github.com/aramantos/devaudit",
     packages=find_packages(),
     include_package_data=True,
+    # The dashboard build and educational markdown are copied INTO the package
+    # by scripts/prepare_package_assets.py before building (files outside the
+    # package can never ship in a wheel - the bug that silently dropped both
+    # from every wheel ever built). Walk the copies so nothing is missed;
+    # globs like '**/*' do not recurse reliably in package_data.
     package_data={
         'devaudit': [
-            'dashboard/dist/**/*',
-            'dashboard/dist/**/**/*',
+            str(p.relative_to(Path(__file__).parent / 'devaudit'))
+            for d in ('dashboard/dist', 'educational/content')
+            for p in (Path(__file__).parent / 'devaudit' / d).rglob('*')
+            if p.is_file()
         ],
     },
     classifiers=[
@@ -33,14 +40,12 @@ setup(
         "Topic :: System :: Systems Administration",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=[
         "rich>=13.7.0",
         "click>=8.1.0",
@@ -60,6 +65,10 @@ setup(
             'google-cloud-aiplatform>=1.36.0',
             'google-auth>=2.0.0',
             'google-api-core>=2.0.0',
+        ],
+        'dev': [
+            'pytest>=8.0.0',
+            'build>=1.0.0',
         ],
     },
     entry_points={

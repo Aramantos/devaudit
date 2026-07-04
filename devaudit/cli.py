@@ -161,6 +161,101 @@ def scan(python, node, docker, go, system, target, no_reports, output_dir, forma
 
 
 @main.command()
+@click.option('--format', type=click.Choice(['text', 'json']), default='text', help='Output format')
+@click.option('--output-dir', type=click.Path(), default=None, help='Save a JSON report to this directory')
+def security(format, output_dir):
+    """Audit system security posture (BIOS, OS updates, antivirus, firewall,
+    drivers, disk health, backups, encryption).
+
+    These are the same eight auditors the dashboard runs; this command makes
+    them reachable without the web UI."""
+    from .auditors.system_auditors import (
+        BIOSAuditor,
+        OSUpdateAuditor,
+        AntivirusAuditor,
+        FirewallAuditor,
+        DriverAuditor,
+        DiskHealthAuditor,
+        BackupAuditor,
+        EncryptionAuditor,
+    )
+
+    auditors = [
+        BIOSAuditor(),
+        OSUpdateAuditor(),
+        AntivirusAuditor(),
+        FirewallAuditor(),
+        DriverAuditor(),
+        DiskHealthAuditor(),
+        BackupAuditor(),
+        EncryptionAuditor(),
+    ]
+
+    if format == 'text':
+        console.print("\n[bold cyan]DevAudit - System Security Scan[/bold cyan]\n")
+
+    results = {}
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        disable=(format == 'json'),
+    ) as progress:
+        for auditor in auditors:
+            task = progress.add_task(f"Auditing {auditor.name}...", total=None)
+            try:
+                results[auditor.name] = auditor.audit()
+            except Exception as e:
+                results[auditor.name] = {"installed": False, "error": str(e)}
+            progress.update(task, completed=True)
+
+    if format == 'json':
+        json_reporter = JSONReporter()
+        print(json_reporter.to_string(results))
+    else:
+        risk_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "none": 4}
+        risk_style = {
+            "critical": "bold red", "high": "red", "medium": "yellow",
+            "low": "green", "none": "dim",
+        }
+        table = Table(title=None, show_lines=False)
+        table.add_column("Auditor", style="cyan", no_wrap=True)
+        table.add_column("Risk", no_wrap=True)
+        table.add_column("Recommendation")
+
+        ordered = sorted(
+            results.items(),
+            key=lambda kv: risk_order.get(kv[1].get("risk_level", "none"), 4),
+        )
+        for name, result in ordered:
+            risk = result.get("risk_level", "none")
+            if result.get("error"):
+                summary = f"[dim]{result['error']}[/dim]"
+            elif not result.get("installed", True):
+                summary = f"[dim]{result.get('reason', 'not applicable on this platform')}[/dim]"
+            else:
+                summary = result.get("recommendation", "")
+            table.add_row(name, f"[{risk_style.get(risk, 'white')}]{risk}[/]", summary)
+
+        console.print(table)
+        warnings = [w for r in results.values() for w in r.get("warnings", [])]
+        if warnings:
+            console.print("\n[yellow]Warnings (usually missing admin rights - results degrade honestly, they don't inflate):[/yellow]")
+            for w in warnings:
+                console.print(f"  [dim]-[/dim] {w}")
+        console.print("\n[dim]Detail + education per finding: devaudit serve (the dashboard)[/dim]\n")
+
+    if output_dir:
+        base_dir = Path(output_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_file = base_dir / f"security_{timestamp}.json"
+        JSONReporter().generate(results, json_file)
+        if format == 'text':
+            console.print(f"[green]JSON report saved:[/green] {json_file}\n")
+
+
+@main.command()
 def fix_docker():
     """Fix common Docker Desktop issues (Windows only)"""
     import platform
