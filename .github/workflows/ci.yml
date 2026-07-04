@@ -124,4 +124,6 @@ jobs:
         run: pip install -e ".[server]" pip-audit
 
       - name: Audit dependencies
-        run: pip-audit --strict
+        # --skip-editable: devaudit itself is installed editable and isn't on
+        # PyPI at this version, so it can't be audited - its DEPENDENCIES are.
+        run: pip-audit --strict --skip-editable
