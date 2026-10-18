@@ -1,0 +1,168 @@
+# What the estate's server (the R740 job queue, any automated worker) may and
+# may not touch in DevAudit.
+#
+# Schema hard_deny/v1, decided at conference call 2, room c2-ra, decision P1,
+# and adopted for DevAudit in room c2-rc (18 Oct 2026). The rules below are
+# enforced by validators' checker and the runner; this comment only names them:
+#   - a path that matches NO list is DENIED
+#   - deny wins over approve, and approve wins over allow
+#   - this file may only TIGHTEN the estate baseline, never loosen it
+#   - a glob that matches no tracked file must carry `pending:` with the reason
+#   - a `reviewed` date older than 98 days makes this repo NOT ELIGIBLE
+#   - the file denies itself, and the runner applies the UNION of the packet
+#     sha's copy and origin/master's copy
+#
+# DevAudit holds no data of ours and deploys nothing on push. Its harm is to
+# the USER'S MACHINE: every line of the package runs there, the auditors run
+# commands on it, the fixers and cleanup endpoints install and remove software
+# on it, and the scan it writes is an inventory of that machine plus a map of
+# its known vulnerabilities. One product class covers that:
+#   host-mutation  (maps_to: deploy-config) - code that runs or changes things
+#                  on the user's host.
+# A PyPI release (twine) is a person's act and never a server job.
+#
+# Left to the default deny on purpose (measured 18 Oct against git ls-files,
+# no glob unmatched or shadowed): configure_venv_paths.py, dashboard/README.md,
+# dashboard/next-env.d.ts, dashboard/tsconfig.json. Widening is deliberate.
+
+schema: hard_deny/v1
+product: devaudit
+owner: devaudit
+reviewed: 2026-10-18
+inherits: [estate]
+
+# Declared here AND inline on each entry (TimeAnchor's shape), until validators
+# publishes which form the checker reads (call 2, c2-rb Q1).
+product_classes:
+  - name: host-mutation
+    maps_to: deploy-config
+    why: "code that runs or changes things on the user's machine"
+
+# The server may change these on a branch. `class` here names the kind of work.
+allow:
+  - glob: "tests/**"
+    class: tests
+    why: "new tests and new assertions, reviewed through S3; the control suites below are carved out to approve"
+  - glob: "docs/*.md"
+    class: docs
+    why: "developer and user documentation; the legal pages are carved out to deny below"
+
+# A person approves before any change here lands.
+approve:
+  - glob: "devaudit/**"
+    class: host-mutation
+    maps_to: deploy-config
+    why: "the package runs on users' machines; every module can reach their host (server/history.py is also the scan store, whose id check stops path traversal)"
+  - glob: "dashboard/src/**"
+    class: customer-data
+    why: "renders the scan in the browser and keeps chat history in localStorage"
+  - glob: "docs/concepts/**"
+    class: compliance
+    why: "the educational guides shipped in the wheel; risk wording must stay honest (principle 3)"
+  - glob: "docs/images/**"
+    class: customer-data
+    why: "screenshots from John's live dashboard; a text personal-data scan cannot see inside them"
+  - glob: "README.md"
+    class: compliance
+    why: "the public promise of what the tool does; the 4 Jul truth pass is the baseline"
+  - glob: "SECURITY.md"
+    class: compliance
+    why: "the vulnerability-disclosure policy and the local-only security model"
+  - glob: "setup.py"
+    class: deploy-config
+    why: "what the wheel contains; this repo once shipped wheels with no dashboard for 18 months"
+  - glob: "MANIFEST.in"
+    class: deploy-config
+    why: "what the sdist and wheel contain"
+  - glob: "scripts/**"
+    class: deploy-config
+    why: "prepare_package_assets.py copies the dashboard and the guides into the package"
+  - glob: "dashboard/package.json"
+    class: deploy-config
+    why: "the dashboard's dependency versions"
+  - glob: "dashboard/package-lock.json"
+    class: deploy-config
+    why: "the dashboard's supply chain; regenerate on Linux, never by hand"
+  - glob: "dashboard/*.config.js"
+    class: deploy-config
+    why: "the static-export build (next.config.js) and its styling pipeline"
+  - glob: "tests/unit/server/test_local_guard.py"
+    class: host-mutation
+    maps_to: deploy-config
+    why: "the proof that a web page cannot drive the dashboard; weakening it hides DNS rebinding or spec injection"
+  - glob: "tests/unit/server/test_history.py"
+    class: customer-data
+    why: "the proof that scan ids cannot reach files outside the history store"
+  - glob: "tests/unit/server/test_ai_gate.py"
+    class: customer-data
+    why: "the proof that AI stays off by default, so no scan leaves the machine unasked"
+
+deny:
+  # The dashboard's only access control: there is no authentication behind it.
+  - glob: "devaudit/server/security.py"
+    class: sign-in
+    why: "Host, Origin and name checks; loosening any of them reopens rebinding, WebSocket hijacking or spec injection"
+  # The one path that sends a user's scan off their machine.
+  - glob: "devaudit/vertex_analyzer.py"
+    class: customer-data
+    why: "sends scan results to the user's own GCP project; off by default and must never gain a default project"
+  # Public legal copy.
+  - glob: "docs/PRIVACY.md"
+    class: compliance
+    why: "the AI feature's privacy notice; public legal copy is John's lane"
+  - glob: "docs/TERMS.md"
+    class: compliance
+    why: "terms of use; public legal copy is John's lane"
+  - glob: "LICENSE"
+    class: compliance
+    why: "the MIT licence"
+  # Deploy config: CI is the guard that the wheel actually contains the product.
+  - glob: ".github/**"
+    class: deploy-config
+    why: "CI (tests on two OSes, the wheel RECORD assertion, pip-audit) and the issue templates"
+  - glob: ".gitignore"
+    class: deploy-config
+    why: "a bare `lib/` pattern once kept 4 dashboard source files out of the public repo"
+  - glob: "hard_deny.yaml"
+    class: deploy-config
+    why: "this file denies itself"
+  # Private records and keys: never tracked, listed so a commit of them is caught.
+  - glob: "private/**"
+    class: customer-data
+    why: "scan reports and notes about John's machines"
+    pending: "untracked by design (gitignored); listed so a commit of it is caught"
+  - glob: ".claude/**"
+    class: customer-data
+    why: "session memory backups"
+    pending: "untracked by design (.git/info/exclude); listed so a commit of it is caught"
+  - glob: ".env*"
+    class: keys
+    why: "DevAudit reads no env file; DEVAUDIT_VERTEX_PROJECT is a variable, never a stored value"
+    pending: "no env file exists in this repo; listed so one is never added"
+
+# Commands the runner refuses in this repo. The first wall is that the server
+# holds no credential for any of them and starts from an empty environment
+# (call 2 P2); this list is the second. Match on the PARSED argv (strip git's
+# global options, unwrap npx and friends, refuse any shell or `env` wrapper),
+# as SignaSeal's file records. `pip install` from F6's hashed bundle and
+# `npm ci` stay allowed: S2 needs them.
+never_run:
+  - "git push"
+  - "twine"
+  - "python -m twine"
+  - "gh release"
+  - "gh pr merge"
+  - "npm publish"
+  - "npm install -g"
+  - "pip install --upgrade"
+  - "pip uninstall"
+  - "docker rm"
+  - "docker rmi"
+  - "wsl"
+  - "devaudit serve"
+  - "python -m devaudit serve"
+  - "sudo"
+  - "ssh"
+  - "scp"
+  - "sh -c"
+  - "bash -c"
