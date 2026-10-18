@@ -69,6 +69,7 @@ setup(
         'dev': [
             'pytest>=8.0.0',
             'build>=1.0.0',
+            'httpx>=0.24.0',  # fastapi.testclient (the server guard tests)
         ],
     },
     entry_points={
