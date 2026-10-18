@@ -31,6 +31,8 @@ owner: devaudit
 reviewed: 2026-10-18
 inherits: [estate]
 
+# Declared here AND inline on each entry (TimeAnchor's shape), until validators
+# publishes which form the checker reads (call 2, c2-rb Q1).
 product_classes:
   - name: host-mutation
     maps_to: deploy-config
@@ -49,6 +51,7 @@ allow:
 approve:
   - glob: "devaudit/**"
     class: host-mutation
+    maps_to: deploy-config
     why: "the package runs on users' machines; every module can reach their host (server/history.py is also the scan store, whose id check stops path traversal)"
   - glob: "dashboard/src/**"
     class: customer-data
@@ -85,6 +88,7 @@ approve:
     why: "the static-export build (next.config.js) and its styling pipeline"
   - glob: "tests/unit/server/test_local_guard.py"
     class: host-mutation
+    maps_to: deploy-config
     why: "the proof that a web page cannot drive the dashboard; weakening it hides DNS rebinding or spec injection"
   - glob: "tests/unit/server/test_history.py"
     class: customer-data
