@@ -3,10 +3,27 @@ Scan history management for tracking and comparing audit results over time.
 """
 
 import json
+import os
+import re
+import warnings
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 import hashlib
+
+# Scan ids are names, never paths (save_scan makes 12 hex chars).
+_SCAN_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _restrict(path: Path, mode: int):
+    """The history is a system inventory plus a CVE map: owner-only on POSIX.
+    On Windows the user profile's ACL already scopes it to the user."""
+    if os.name != "posix":
+        return
+    try:
+        os.chmod(path, mode)
+    except OSError as e:
+        warnings.warn(f"Could not restrict permissions on {path}: {e}")
 
 
 class ScanHistory:
@@ -24,13 +41,24 @@ class ScanHistory:
 
         self.storage_dir = storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        _restrict(self.storage_dir, 0o700)
         self.index_file = self.storage_dir / "index.json"
         self._ensure_index()
+
+    def _scan_file(self, scan_id) -> Optional[Path]:
+        """Path of a scan's file, or None if the id is not a plain name."""
+        if not isinstance(scan_id, str) or not _SCAN_ID.match(scan_id):
+            return None
+        return self.storage_dir / f"{scan_id}.json"
+
+    def _write_private(self, path: Path, text: str):
+        path.write_text(text)
+        _restrict(path, 0o600)
 
     def _ensure_index(self):
         """Ensure index file exists."""
         if not self.index_file.exists():
-            self.index_file.write_text(json.dumps({
+            self._write_private(self.index_file, json.dumps({
                 "scans": [],
                 "version": "1.0"
             }, indent=2))
@@ -44,7 +72,7 @@ class ScanHistory:
 
     def _save_index(self, index: Dict):
         """Save scan index."""
-        self.index_file.write_text(json.dumps(index, indent=2))
+        self._write_private(self.index_file, json.dumps(index, indent=2))
 
     def save_scan(self, results: Dict, metadata: Optional[Dict] = None) -> str:
         """
@@ -76,7 +104,7 @@ class ScanHistory:
             "metadata": metadata or {},
             "results": results
         }
-        scan_file.write_text(json.dumps(scan_data, indent=2, default=str))
+        self._write_private(scan_file, json.dumps(scan_data, indent=2, default=str))
 
         # Update index
         index = self._load_index()
@@ -86,8 +114,8 @@ class ScanHistory:
         if len(index["scans"]) > 50:
             # Delete old scan files
             for old_scan in index["scans"][50:]:
-                old_file = self.storage_dir / f"{old_scan['id']}.json"
-                if old_file.exists():
+                old_file = self._scan_file(old_scan.get("id"))
+                if old_file is not None and old_file.exists():
                     old_file.unlink()
 
             index["scans"] = index["scans"][:50]
@@ -98,8 +126,8 @@ class ScanHistory:
 
     def get_scan(self, scan_id: str) -> Optional[Dict]:
         """Get a specific scan by ID."""
-        scan_file = self.storage_dir / f"{scan_id}.json"
-        if not scan_file.exists():
+        scan_file = self._scan_file(scan_id)
+        if scan_file is None or not scan_file.exists():
             return None
 
         try:
@@ -288,8 +316,8 @@ class ScanHistory:
 
     def delete_scan(self, scan_id: str) -> bool:
         """Delete a scan from history."""
-        scan_file = self.storage_dir / f"{scan_id}.json"
-        if not scan_file.exists():
+        scan_file = self._scan_file(scan_id)
+        if scan_file is None or not scan_file.exists():
             return False
 
         try:
@@ -315,8 +343,8 @@ class ScanHistory:
         Returns:
             True if successful, False otherwise
         """
-        scan_file = self.storage_dir / f"{scan_id}.json"
-        if not scan_file.exists():
+        scan_file = self._scan_file(scan_id)
+        if scan_file is None or not scan_file.exists():
             return False
 
         try:
@@ -329,7 +357,7 @@ class ScanHistory:
             scan_data["metadata"]["notes"] = notes
 
             # Save updated scan
-            scan_file.write_text(json.dumps(scan_data, indent=2, default=str))
+            self._write_private(scan_file, json.dumps(scan_data, indent=2, default=str))
 
             # Update index
             index = self._load_index()

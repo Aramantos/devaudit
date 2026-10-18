@@ -11,6 +11,16 @@ import json
 import asyncio
 from typing import List, Optional
 
+from .security import (
+    LOCAL_ORIGIN_REGEX,
+    LocalOnlyGuard,
+    allow_hostname,
+    invalid_docker_refs,
+    invalid_npm_names,
+    invalid_python_names,
+    refuse_invalid,
+)
+
 # Create FastAPI app
 app = FastAPI(
     title="DevAudit Dashboard",
@@ -18,18 +28,19 @@ app = FastAPI(
     version="0.3.0"
 )
 
-# Add CORS middleware (localhost only)
+# Add CORS middleware (localhost only, any port: `serve` binds 8888, the
+# Next.js dev server runs on 3000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://localhost:3000",  # For development
-    ],
+    allow_origin_regex=LOCAL_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added last so it runs first: Host and Origin checks before anything else
+# (see security.py for the attacks this stops).
+app.add_middleware(LocalOnlyGuard)
 
 def _resolve_dashboard_dir() -> Path:
     """Package-internal copy first (what ships in the wheel, via
@@ -168,6 +179,10 @@ async def upgrade_python_packages(packages: List[str]):
     """Upgrade Python packages."""
     import subprocess
 
+    invalid = invalid_python_names(packages)
+    if invalid:
+        return refuse_invalid("Python package name", invalid)
+
     try:
         results = []
         for package in packages:
@@ -198,6 +213,10 @@ async def upgrade_python_packages(packages: List[str]):
 async def uninstall_python_packages(packages: List[str]):
     """Uninstall Python packages from global environment."""
     import subprocess
+
+    invalid = invalid_python_names(packages)
+    if invalid:
+        return refuse_invalid("Python package name", invalid)
 
     try:
         results = []
@@ -230,6 +249,10 @@ async def upgrade_node_packages(packages: List[str]):
     """Upgrade Node.js packages."""
     import subprocess
 
+    invalid = invalid_npm_names(packages)
+    if invalid:
+        return refuse_invalid("npm package name", invalid)
+
     try:
         results = []
         for package in packages:
@@ -261,6 +284,10 @@ async def remove_docker_containers(container_ids: List[str]):
     """Remove Docker containers."""
     import subprocess
 
+    invalid = invalid_docker_refs(container_ids)
+    if invalid:
+        return refuse_invalid("container id or name", invalid)
+
     try:
         results = []
         for container_id in container_ids:
@@ -291,6 +318,10 @@ async def remove_docker_containers(container_ids: List[str]):
 async def remove_docker_images(image_ids: List[str]):
     """Remove Docker images."""
     import subprocess
+
+    invalid = invalid_docker_refs(image_ids)
+    if invalid:
+        return refuse_invalid("image reference", invalid)
 
     try:
         results = []
@@ -933,6 +964,16 @@ def start_server(host: str = "127.0.0.1", port: int = 8080, open_browser: bool =
     from .history import ScanHistory
     scan_history = ScanHistory()
     scanner = RealtimeScanner(broadcast_to_clients, history_manager=scan_history)
+
+    # The Host guard trusts local names; a specific address the user chose to
+    # bind is trusted too. A wildcard bind reaches the network with NO
+    # authentication, so it stays opt-in per hostname.
+    if host in ("0.0.0.0", "::", ""):
+        print("Warning: listening on every interface. The dashboard has no "
+              "authentication; requests are only served for local hostnames "
+              "plus any listed in DEVAUDIT_ALLOWED_HOSTS.")
+    else:
+        allow_hostname(host)
 
     # Open browser if requested
     if open_browser:
