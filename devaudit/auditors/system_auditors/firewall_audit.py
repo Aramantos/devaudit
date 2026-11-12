@@ -9,11 +9,14 @@ Requires Admin: Partial (some info available without admin)
 
 import re
 import json
-from typing import Dict, Optional, List
+import logging
+from typing import Dict, Optional, List, Tuple
 from pathlib import Path
 
 from devaudit.auditors.base import BaseAuditor, RiskLevel, AuditorCategory
 from devaudit.educational import get_educational_content
+
+logger = logging.getLogger(__name__)
 
 
 class FirewallAuditor(BaseAuditor):
@@ -89,6 +92,12 @@ class FirewallAuditor(BaseAuditor):
         # Optionally add open ports (if detected)
         if "open_ports" in fw_info:
             result["open_ports"] = fw_info["open_ports"]
+
+        # Honest-degradation flags (Linux): a firewall we could not read, and
+        # the command a person runs to read it, or no firewall tool at all.
+        for key in ("status_unknown", "check_command", "no_firewall_found"):
+            if key in fw_info:
+                result[key] = fw_info[key]
 
         # Assess risk and add recommendation
         result["risk_level"] = self.assess_risk(result).value
@@ -280,137 +289,132 @@ class FirewallAuditor(BaseAuditor):
         return result
 
     def _get_firewall_info_linux(self) -> Dict:
-        """Get firewall information on Linux."""
-        result = {}
-        warnings = []
+        """Get firewall information on Linux.
 
+        Front-ends own the rules when present (ufw, then firewalld), then
+        native nftables, then legacy iptables. Every tool is looked up in sbin
+        as well as PATH (base.find_command) and run by its full path. A tool
+        that is there but whose status needs root reads as status_unknown,
+        never as "disabled".
+        """
         try:
-            # Try to detect which firewall system is in use
-            firewall_type = None
-            enabled = False
+            ufw = self.find_command("ufw")
+            if ufw:
+                return self._read_ufw(ufw)
+            firewalld = self.find_command("firewall-cmd")
+            if firewalld:
+                return self._read_firewalld(firewalld)
+            nft = self.find_command("nft")
+            if nft:
+                return self._read_nftables(nft)
+            iptables = self.find_command("iptables")
+            if iptables:
+                return self._read_iptables(iptables)
 
-            # Check for ufw (Ubuntu/Debian common)
-            if self.check_command_exists("ufw"):
-                stdout, stderr, returncode = self.run_command(
-                    ["sudo", "-n", "ufw", "status"],
-                    timeout=10
-                )
-
-                # Try without sudo if passwordless sudo fails
-                if returncode != 0:
-                    stdout, stderr, returncode = self.run_command(
-                        ["ufw", "status"],
-                        timeout=10
-                    )
-
-                if returncode == 0 and stdout:
-                    firewall_type = "UFW (Uncomplicated Firewall)"
-                    enabled = "Status: active" in stdout
-
-                    result["firewall_type"] = firewall_type
-                    result["enabled"] = enabled
-                    result["profiles"] = [
-                        {
-                            "name": "UFW",
-                            "enabled": enabled,
-                            "inbound_default": "Deny" if enabled else "Allow",
-                            "outbound_default": "Allow"
-                        }
-                    ]
-                    result["inbound_default"] = "Deny" if enabled else "Allow"
-                    result["outbound_default"] = "Allow"
-
-            # Check for firewalld (RHEL/CentOS/Fedora common)
-            elif self.check_command_exists("firewall-cmd"):
-                stdout, stderr, returncode = self.run_command(
-                    ["sudo", "-n", "firewall-cmd", "--state"],
-                    timeout=10
-                )
-
-                # Try without sudo
-                if returncode != 0:
-                    stdout, stderr, returncode = self.run_command(
-                        ["firewall-cmd", "--state"],
-                        timeout=10
-                    )
-
-                if returncode == 0 and stdout:
-                    firewall_type = "firewalld"
-                    enabled = "running" in stdout.lower()
-
-                    # Get active zones
-                    zones_stdout, zones_stderr, zones_returncode = self.run_command(
-                        ["firewall-cmd", "--get-active-zones"],
-                        timeout=10
-                    )
-
-                    result["firewall_type"] = firewall_type
-                    result["enabled"] = enabled
-                    result["profiles"] = [
-                        {
-                            "name": "firewalld",
-                            "enabled": enabled,
-                            "inbound_default": "Reject" if enabled else "Allow",
-                            "outbound_default": "Allow"
-                        }
-                    ]
-                    result["inbound_default"] = "Reject" if enabled else "Allow"
-                    result["outbound_default"] = "Allow"
-
-            # Check for iptables (raw)
-            elif self.check_command_exists("iptables"):
-                stdout, stderr, returncode = self.run_command(
-                    ["sudo", "-n", "iptables", "-L", "-n"],
-                    timeout=10
-                )
-
-                # Try without sudo
-                if returncode != 0:
-                    stdout, stderr, returncode = self.run_command(
-                        ["iptables", "-L", "-n"],
-                        timeout=10
-                    )
-
-                if returncode == 0 and stdout:
-                    firewall_type = "iptables"
-
-                    # Check if there are any rules beyond default ACCEPT
-                    # If there are rules, firewall is "configured"
-                    enabled = "DROP" in stdout or "REJECT" in stdout or len(stdout.split('\n')) > 10
-
-                    result["firewall_type"] = firewall_type
-                    result["enabled"] = enabled
-                    result["profiles"] = [
-                        {
-                            "name": "iptables",
-                            "enabled": enabled,
-                            "inbound_default": "Unknown (check rules)",
-                            "outbound_default": "Allow"
-                        }
-                    ]
-                    result["inbound_default"] = "Unknown (check rules)"
-                    result["outbound_default"] = "Allow"
-
-                    if not enabled:
-                        warnings.append("iptables exists but appears unconfigured")
-
-            else:
-                warnings.append("Could not detect firewall system (ufw/firewalld/iptables)")
-                result["firewall_type"] = "Unknown"
-                result["enabled"] = False
-                result["profiles"] = []
-                result["inbound_default"] = "Unknown"
-                result["outbound_default"] = "Unknown"
-
-            if warnings:
-                result["warnings"] = warnings
-
+            logger.info("no firewall tool found on PATH or in sbin")
+            return {
+                "firewall_type": "None detected",
+                "enabled": False,
+                "no_firewall_found": True,
+                "profiles": [],
+                "inbound_default": "Allow",
+                "outbound_default": "Allow",
+                "warnings": [
+                    "No firewall tool found (looked for ufw, firewall-cmd, nft and "
+                    "iptables on PATH and in /usr/local/sbin, /usr/sbin and /sbin)"
+                ],
+            }
         except Exception as e:
+            logger.warning("firewall check failed: %s", e)
             return {
                 "error": f"Failed to check firewall status: {str(e)}",
-                "warnings": warnings
+                "warnings": []
             }
 
+    def _read_status(self, cmd: List[str]) -> Tuple[str, str, int]:
+        """Run a read-only status command, with passwordless sudo if the user has it.
+
+        `sudo -n` never prompts: it either runs at once or fails, and then the
+        command runs as the user.
+        """
+        stdout, stderr, returncode = self.run_command(["sudo", "-n", *cmd], timeout=10)
+        if returncode == 0:
+            return stdout, stderr, returncode
+        return self.run_command(cmd, timeout=10)
+
+    def _status_unknown(self, firewall_type: str, check_command: str, detail: str) -> Dict:
+        """The firewall is installed but we could not read whether it is filtering."""
+        detail = (detail or "").strip() or "permission denied"
+        logger.info("%s is installed but its status could not be read: %s", firewall_type, detail)
+        return {
+            "firewall_type": firewall_type,
+            "enabled": False,
+            "status_unknown": True,
+            "check_command": check_command,
+            "profiles": [],
+            "inbound_default": "Unknown",
+            "outbound_default": "Unknown",
+            "warnings": [f"{firewall_type} is installed but reading its status needs root ({detail})"],
+        }
+
+    @staticmethod
+    def _single_profile(name: str, enabled: bool, inbound: str, outbound: str = "Allow") -> Dict:
+        return {
+            "profiles": [
+                {"name": name, "enabled": enabled, "inbound_default": inbound, "outbound_default": outbound}
+            ],
+            "inbound_default": inbound,
+            "outbound_default": outbound,
+        }
+
+    def _read_ufw(self, ufw: str) -> Dict:
+        stdout, stderr, returncode = self._read_status([ufw, "status"])
+        if returncode != 0 or "Status:" not in stdout:
+            return self._status_unknown("UFW (Uncomplicated Firewall)", "sudo ufw status", stderr)
+        enabled = "Status: active" in stdout
+        result = {"firewall_type": "UFW (Uncomplicated Firewall)", "enabled": enabled}
+        result.update(self._single_profile("UFW", enabled, "Deny" if enabled else "Allow"))
+        return result
+
+    def _read_firewalld(self, firewalld: str) -> Dict:
+        # `firewall-cmd --state` prints "running" (rc 0) or "not running" (rc 252).
+        stdout, stderr, returncode = self._read_status([firewalld, "--state"])
+        state = stdout.strip().lower()
+        if state not in ("running", "not running"):
+            return self._status_unknown("firewalld", "sudo firewall-cmd --state", stderr)
+        enabled = state == "running"
+        result = {"firewall_type": "firewalld", "enabled": enabled}
+        result.update(self._single_profile("firewalld", enabled, "Reject" if enabled else "Allow"))
+        return result
+
+    def _read_nftables(self, nft: str) -> Dict:
+        stdout, stderr, returncode = self._read_status([nft, "list", "ruleset"])
+        if returncode != 0:
+            return self._status_unknown("nftables", "sudo nft list ruleset", stderr)
+
+        # Filtering is on when any rule or chain policy drops or rejects. The
+        # inbound default is the policy of the base chains on the input hook:
+        # a drop in any of them is final for the packet.
+        filters = re.search(r"\b(drop|reject)\b", stdout) is not None
+        input_policies = re.findall(r"hook input priority [^;]*;\s*policy (\w+);", stdout)
+        inbound = "Drop" if "drop" in input_policies else "Allow"
+        result = {"firewall_type": "nftables", "enabled": filters}
+        result.update(self._single_profile("nftables", filters, inbound))
+        if not filters:
+            result["warnings"] = ["nftables is installed but no rule drops or rejects anything"]
+        return result
+
+    def _read_iptables(self, iptables: str) -> Dict:
+        stdout, stderr, returncode = self._read_status([iptables, "-L", "-n"])
+        if returncode != 0 or not stdout:
+            return self._status_unknown("iptables", "sudo iptables -L -n", stderr)
+
+        # Any rule beyond the default ACCEPT counts as configured.
+        enabled = "DROP" in stdout or "REJECT" in stdout or len(stdout.split('\n')) > 10
+        result = {"firewall_type": "iptables", "enabled": enabled}
+        result.update(self._single_profile("iptables", enabled, "Unknown (check rules)"))
+        if not enabled:
+            result["warnings"] = ["iptables exists but appears unconfigured"]
         return result
 
     def assess_risk(self, result: Dict) -> RiskLevel:
@@ -420,9 +424,9 @@ class FirewallAuditor(BaseAuditor):
         Risk levels:
             - CRITICAL: Firewall completely disabled
             - HIGH: Firewall partially disabled (some profiles off)
-            - MEDIUM: Firewall enabled but permissive defaults
+            - MEDIUM: Firewall enabled but permissive defaults, or installed
+              but its status needs root to read (status_unknown)
             - LOW: Firewall enabled with proper defaults
-            - NONE: Can't determine
 
         Args:
             result: Audit result dict
@@ -433,6 +437,11 @@ class FirewallAuditor(BaseAuditor):
         enabled = result.get("enabled", False)
         profiles = result.get("profiles", [])
         inbound_default = result.get("inbound_default", "Unknown")
+
+        # Installed but unreadable without root: we do not know, so MEDIUM,
+        # never CRITICAL (honest degradation, context.md Decision 4).
+        if result.get("status_unknown"):
+            return RiskLevel.MEDIUM
 
         if not enabled:
             return RiskLevel.CRITICAL
@@ -462,7 +471,27 @@ class FirewallAuditor(BaseAuditor):
         firewall_type = result.get("firewall_type", "firewall")
         profiles = result.get("profiles", [])
 
+        if result.get("status_unknown"):
+            return (
+                f"{firewall_type} is installed, but reading its status needs root, so DevAudit "
+                "cannot tell whether it is filtering traffic. "
+                f"HOW TO CHECK: run `{result.get('check_command', '')}`."
+            )
+
+        if result.get("no_firewall_found"):
+            return (
+                "No host firewall found (looked for ufw, firewalld, nftables and iptables). "
+                "Without one, every service listening on this machine can be reached from your network. "
+                "HOW TO FIX: on Debian, Ubuntu or Raspberry Pi OS, `sudo apt install ufw`, allow what "
+                "you use first (for example `sudo ufw allow ssh`), then `sudo ufw enable`."
+            )
+
         if risk_level == "critical":
+            if firewall_type == "nftables":
+                return (
+                    "nftables is installed but no rule drops or rejects anything, so nothing is "
+                    "being filtered. Add an input policy that drops what you have not allowed."
+                )
             return f"{firewall_type} is disabled. Enable it immediately to protect against network attacks."
 
         elif risk_level == "high":

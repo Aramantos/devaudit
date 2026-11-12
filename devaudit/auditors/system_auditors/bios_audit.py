@@ -8,6 +8,7 @@ Requires Admin: No (but limited info without admin on some platforms)
 """
 
 import re
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from pathlib import Path
@@ -15,9 +16,18 @@ from pathlib import Path
 from devaudit.auditors.base import BaseAuditor, RiskLevel, AuditorCategory
 from devaudit.educational import get_educational_content
 
+logger = logging.getLogger(__name__)
+
 
 class BIOSAuditor(BaseAuditor):
     """Audit BIOS/UEFI version and age."""
+
+    # Linux: the SMBIOS/DMI table, readable without root. PCs have it.
+    DMI_ID_DIR = Path("/sys/class/dmi/id")
+    # Linux: device-tree boards (ARM single-board computers such as a
+    # Raspberry Pi) have no SMBIOS/DMI and no PC-style BIOS. They name
+    # themselves here instead, as a NUL-terminated string.
+    DEVICE_TREE_MODEL = Path("/proc/device-tree/model")
 
     def __init__(self, target_dir: Optional[str] = None):
         super().__init__(target_dir)
@@ -66,6 +76,19 @@ class BIOSAuditor(BaseAuditor):
         bios_info = self._get_bios_info()
 
         if not bios_info.get("version"):
+            # A device-tree board has no BIOS to read: say "not applicable",
+            # not "could not detect, may need root" (M1's Pi 5 run, 2026-07-04).
+            board = self._device_tree_board() if self.platform == "Linux" else None
+            if board:
+                logger.info("no SMBIOS/DMI, device-tree board %r: BIOS not applicable", board)
+                return {
+                    "installed": True,
+                    "applicable": False,
+                    "motherboard": board,
+                    "risk_level": RiskLevel.NONE.value,
+                    "recommendation": self._not_applicable_text(board),
+                    "educational_content": self.get_educational_content()
+                }
             return {
                 "installed": True,
                 "error": "Could not detect BIOS information",
@@ -82,6 +105,7 @@ class BIOSAuditor(BaseAuditor):
 
         result = {
             "installed": True,
+            "applicable": True,
             "vendor": bios_info.get("vendor", "Unknown"),
             "version": bios_info.get("version", "Unknown"),
             "release_date": bios_info.get("release_date", "Unknown"),
@@ -249,13 +273,15 @@ class BIOSAuditor(BaseAuditor):
         return result
 
     def _get_bios_info_linux(self) -> Dict[str, str]:
-        """Get BIOS information on Linux using dmidecode."""
+        """Get BIOS information on Linux: dmidecode if present, else sysfs (no root)."""
         result = {}
 
-        # Try dmidecode (requires root, but may work without for some info)
-        stdout, stderr, returncode = self.run_command(
-            ["dmidecode", "-t", "bios"],
-            timeout=10
+        # dmidecode lives in sbin (off a normal user's PATH) and needs root;
+        # the sysfs fallback below reads the same table without root.
+        dmidecode = self.find_command("dmidecode")
+        stdout, stderr, returncode = (
+            self.run_command([dmidecode, "-t", "bios"], timeout=10)
+            if dmidecode else ("", "dmidecode not found", -1)
         )
 
         if returncode == 0 and stdout:
@@ -273,9 +299,9 @@ class BIOSAuditor(BaseAuditor):
                 result["release_date"] = date_match.group(1).strip()
 
         # Try to get motherboard info
-        stdout, stderr, returncode = self.run_command(
-            ["dmidecode", "-t", "baseboard"],
-            timeout=10
+        stdout, stderr, returncode = (
+            self.run_command([dmidecode, "-t", "baseboard"], timeout=10)
+            if dmidecode else ("", "dmidecode not found", -1)
         )
 
         if returncode == 0 and stdout:
@@ -287,32 +313,42 @@ class BIOSAuditor(BaseAuditor):
                 product = product_match.group(1).strip()
                 result["motherboard"] = f"{manufacturer} {product}"
 
-        # Fallback: Try reading from sysfs (doesn't require root)
-        if not result.get("version"):
-            bios_version_path = Path("/sys/class/dmi/id/bios_version")
-            if bios_version_path.exists():
+        # Fallback: read the same table from sysfs (doesn't require root)
+        for key, filename in (("version", "bios_version"), ("vendor", "bios_vendor"),
+                              ("release_date", "bios_date")):
+            if result.get(key):
+                continue
+            path = self.DMI_ID_DIR / filename
+            if path.exists():
                 try:
-                    result["version"] = bios_version_path.read_text(encoding='utf-8').strip()
-                except Exception:
-                    pass
-
-        if not result.get("vendor"):
-            bios_vendor_path = Path("/sys/class/dmi/id/bios_vendor")
-            if bios_vendor_path.exists():
-                try:
-                    result["vendor"] = bios_vendor_path.read_text(encoding='utf-8').strip()
-                except Exception:
-                    pass
-
-        if not result.get("release_date"):
-            bios_date_path = Path("/sys/class/dmi/id/bios_date")
-            if bios_date_path.exists():
-                try:
-                    result["release_date"] = bios_date_path.read_text(encoding='utf-8').strip()
-                except Exception:
-                    pass
+                    result[key] = path.read_text(encoding='utf-8').strip()
+                except Exception as e:
+                    logger.debug("could not read %s: %s", path, e)
 
         return result
+
+    def _device_tree_board(self) -> Optional[str]:
+        """The board's own name from the device tree, or None if it has none."""
+        try:
+            if not self.DEVICE_TREE_MODEL.exists():
+                return None
+            raw = self.DEVICE_TREE_MODEL.read_bytes()
+        except Exception as e:
+            logger.debug("could not read %s: %s", self.DEVICE_TREE_MODEL, e)
+            return None
+        board = raw.rstrip(b"\x00").decode("utf-8", errors="replace").strip()
+        return board or None
+
+    @staticmethod
+    def _not_applicable_text(board: str) -> str:
+        text = (
+            f"Not applicable on this hardware: {board} has no PC-style BIOS/UEFI "
+            "(no SMBIOS/DMI table), so there is no BIOS age to check. Its boot firmware "
+            "is updated with the board maker's own tool."
+        )
+        if "raspberry pi" in board.lower():
+            text += " On a Raspberry Pi 4 or 5, `sudo rpi-eeprom-update` checks the bootloader firmware."
+        return text
 
     def _parse_windows_date(self, date_str: str) -> str:
         """
