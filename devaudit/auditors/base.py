@@ -2,6 +2,7 @@
 Base auditor class that all specific auditors inherit from.
 """
 
+import logging
 import subprocess
 import shutil
 import platform
@@ -10,6 +11,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Literal
 from abc import ABC, abstractmethod
 from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+# Debian, Ubuntu and Raspberry Pi OS keep system tools (nft, iptables, ufw,
+# dmidecode, smartctl) in sbin, which is NOT on a normal user's PATH. A tool we
+# failed to find must never read as a tool that is absent: on the Pi 5 that is
+# how a working nftables firewall read as CRITICAL "Unknown is disabled"
+# (M1's first Linux run, 2026-07-04).
+SYSTEM_SBIN_DIRS = ("/usr/local/sbin", "/usr/sbin", "/sbin")
 
 
 class RiskLevel(str, Enum):
@@ -231,6 +241,21 @@ class BaseAuditor(ABC):
     def check_command_exists(self, command: str) -> bool:
         """Check if a command exists in PATH."""
         return shutil.which(command) is not None
+
+    def find_command(self, command: str) -> Optional[str]:
+        """Return a command's full path, looking in the sbin directories too.
+
+        On Linux and macOS, system tools often live in sbin directories that a
+        normal user's PATH leaves out, so a PATH-only lookup misses them. Run
+        the tool by the path this returns. None means the tool is not there.
+        """
+        found = shutil.which(command)
+        if found or self.platform == "Windows":
+            return found
+        found = shutil.which(command, path=os.pathsep.join(SYSTEM_SBIN_DIRS))
+        if found:
+            logger.debug("%s is not on PATH; found it in sbin at %s", command, found)
+        return found
 
     def run_command_in_target(self, cmd: List[str], timeout: int = 30) -> Tuple[str, str, int]:
         """

@@ -9,6 +9,7 @@ Requires Admin: Sometimes (for detailed backup status)
 
 import re
 import json
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from pathlib import Path
@@ -16,9 +17,34 @@ from pathlib import Path
 from devaudit.auditors.base import BaseAuditor, RiskLevel, AuditorCategory
 from devaudit.educational import get_educational_content
 
+logger = logging.getLogger(__name__)
+
 
 class BackupAuditor(BaseAuditor):
     """Audit system backup status and configuration."""
+
+    # Linux: a backup tool's config file means it is set up, though we cannot
+    # read when it last ran from the file alone.
+    LINUX_BACKUP_CONFIGS = {
+        "rsnapshot": "/etc/rsnapshot.conf",
+        "duplicity": "/etc/duplicity",
+        "timeshift": "/etc/timeshift",
+        "borg": "~/.config/borg",
+        "restic": "~/.config/restic",
+    }
+
+    # Linux: a systemd timer whose name says backup, or names a backup tool, is
+    # a scheduled backup we can read (when it last fired, whether its service
+    # succeeded). Worked case: the Raspberry Pi's pi-backup.timer, which read
+    # CRITICAL "no backup" before this (M1's first Linux run, 2026-07-04).
+    BACKUP_TIMER_WORDS = ("backup", "restic", "borg", "rsnapshot", "duplicity", "timeshift")
+
+    # Debian and Ubuntu enable dpkg-db-backup.timer by default. It copies the
+    # package manager's own database, not the user's data, so it is no backup.
+    NOT_USER_BACKUPS = frozenset({"dpkg-db-backup.timer"})
+
+    # Unit-file states in which a timer will not fire.
+    TIMER_OFF_STATES = frozenset({"disabled", "masked", "masked-runtime", "bad"})
 
     def __init__(self, target_dir: Optional[str] = None):
         super().__init__(target_dir)
@@ -80,6 +106,15 @@ class BackupAuditor(BaseAuditor):
             "days_since_backup": backup_info.get("days_since_backup", 999),
             "educational_content": self.get_educational_content()
         }
+
+        # Honest states (Linux): set up but last run unknown, never run, or the
+        # last run failed, and the systemd timer and service behind the backup.
+        for key in (
+            "status_unknown", "never_run", "last_run_failed", "last_result",
+            "backup_timer", "backup_service", "backup_timers",
+        ):
+            if key in backup_info:
+                result[key] = backup_info[key]
 
         # Assess risk and add recommendation
         result["risk_level"] = self.assess_risk(result).value
@@ -260,53 +295,135 @@ class BackupAuditor(BaseAuditor):
         return result
 
     def _get_backup_info_linux(self) -> Dict:
-        """Get backup information on Linux."""
-        result = {}
+        """Get backup information on Linux.
+
+        A scheduled backup (a systemd timer) is read first, because systemd
+        says when it last ran and whether it succeeded. A backup tool's config
+        file comes second: it is set up, but when it last ran is unknown.
+        """
         warnings = []
 
-        # Linux has many backup solutions, check for common ones
-        backup_configured = False
-        backup_type = "None"
-        last_backup = "Unknown"
-        days_since_backup = 999
-
         try:
-            # Check for common backup tools
-            common_backup_tools = {
-                "rsnapshot": "/etc/rsnapshot.conf",
-                "duplicity": "/etc/duplicity",
-                "timeshift": "/etc/timeshift",
-                "borg": "~/.config/borg",
-                "restic": "~/.config/restic"
+            timers = self._find_backup_timers_linux()
+            if timers:
+                return self._backup_info_from_timer(timers)
+
+            for tool, config_path in self.LINUX_BACKUP_CONFIGS.items():
+                if Path(config_path).expanduser().exists():
+                    logger.info("found %s configuration at %s, last run unknown", tool, config_path)
+                    return {
+                        "backup_configured": True,
+                        "backup_enabled": True,  # Configured, assume enabled
+                        "backup_type": tool.capitalize(),
+                        "last_backup": "Unknown",
+                        "days_since_backup": None,
+                        "status_unknown": True,
+                        "warnings": [f"Found {tool} configuration, but cannot determine last backup time"],
+                    }
+
+            warnings.append("No common backup tools detected. Consider setting up automated backups.")
+            return {
+                "backup_configured": False,
+                "backup_enabled": False,
+                "backup_type": "None",
+                "last_backup": "Unknown",
+                "days_since_backup": 999,
+                "warnings": warnings,
             }
 
-            for tool, config_path in common_backup_tools.items():
-                path = Path(config_path).expanduser()
-                if path.exists():
-                    backup_configured = True
-                    backup_type = tool.capitalize()
-                    warnings.append(f"Found {tool} configuration, but cannot determine last backup time")
-                    break
-
-            result["backup_configured"] = backup_configured
-            result["backup_enabled"] = backup_configured  # If configured, assume enabled
-            result["backup_type"] = backup_type
-            result["last_backup"] = last_backup
-            result["days_since_backup"] = days_since_backup
-
-            if not backup_configured:
-                warnings.append("No common backup tools detected. Consider setting up automated backups.")
-
-            if warnings:
-                result["warnings"] = warnings
-
         except Exception as e:
+            logger.warning("backup check failed: %s", e)
             return {
                 "error": f"Failed to check backup status: {str(e)}",
                 "warnings": warnings
             }
 
-        return result
+    def _find_backup_timers_linux(self) -> List[Dict]:
+        """Every systemd timer that looks like a user-data backup, with its last run."""
+        systemctl = self.find_command("systemctl")
+        if not systemctl:
+            return []
+        stdout, stderr, returncode = self.run_command(
+            [systemctl, "list-unit-files", "--type=timer", "--no-legend", "--no-pager"],
+            timeout=10
+        )
+        if returncode != 0:
+            # e.g. a container not booted with systemd
+            logger.debug("systemctl list-unit-files failed (rc %s): %s", returncode, stderr.strip())
+            return []
+
+        timers = []
+        for line in stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 2 or not parts[0].endswith(".timer"):
+                continue
+            name, state = parts[0], parts[1]
+            if name in self.NOT_USER_BACKUPS:
+                continue
+            if not any(word in name.lower() for word in self.BACKUP_TIMER_WORDS):
+                continue
+            timer_props = self._systemctl_show(systemctl, name, "Unit,LastTriggerUSec")
+            service = timer_props.get("Unit") or name[: -len(".timer")] + ".service"
+            service_props = self._systemctl_show(systemctl, service, "Result")
+            timers.append({
+                "timer": name,
+                "service": service,
+                "enabled": state not in self.TIMER_OFF_STATES,
+                "last_run": self._parse_systemd_time(timer_props.get("LastTriggerUSec", "")),
+                "result": service_props.get("Result", ""),
+            })
+        logger.debug("backup timers found: %s", [t["timer"] for t in timers])
+        return timers
+
+    def _systemctl_show(self, systemctl: str, unit: str, properties: str) -> Dict[str, str]:
+        """`systemctl show` as a dict (Key=Value lines). Empty when it fails."""
+        stdout, stderr, returncode = self.run_command(
+            [systemctl, "show", unit, f"--property={properties}", "--no-pager"],
+            timeout=10
+        )
+        if returncode != 0:
+            logger.debug("systemctl show %s failed (rc %s): %s", unit, returncode, stderr.strip())
+            return {}
+        return dict(line.split("=", 1) for line in stdout.splitlines() if "=" in line)
+
+    @staticmethod
+    def _parse_systemd_time(value: str) -> Optional[datetime]:
+        """'Wed 2026-11-11 03:45:47 GMT' -> datetime. 'n/a' or empty (never fired) -> None.
+
+        The zone is dropped: a day count does not need it.
+        """
+        match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", value or "")
+        if not match:
+            return None
+        return datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
+
+    def _backup_info_from_timer(self, timers: List[Dict]) -> Dict:
+        """Read the backup from its timers: an enabled one, most recently run, leads."""
+        timers = sorted(
+            timers,
+            key=lambda t: (t["enabled"], t["last_run"] or datetime.min),
+            reverse=True,
+        )
+        lead = timers[0]
+        info = {
+            "backup_configured": True,
+            "backup_enabled": lead["enabled"],
+            "backup_type": f"systemd timer {lead['timer']}",
+            "backup_timer": lead["timer"],
+            "backup_service": lead["service"],
+            "backup_timers": [t["timer"] for t in timers],
+        }
+        if lead["last_run"] is None:
+            info["never_run"] = True
+            info["last_backup"] = "Never"
+            info["days_since_backup"] = None
+        else:
+            info["last_backup"] = lead["last_run"].strftime("%Y-%m-%d %H:%M:%S")
+            info["days_since_backup"] = max(0, (datetime.now() - lead["last_run"]).days)
+        if lead["result"] and lead["result"] != "success":
+            info["last_run_failed"] = True
+            info["last_result"] = lead["result"]
+        return info
 
     def assess_risk(self, result: Dict) -> RiskLevel:
         """
@@ -334,6 +451,15 @@ class BackupAuditor(BaseAuditor):
 
         if not backup_enabled:
             return RiskLevel.HIGH
+
+        # The last run failed, or it has never run: no recent copy exists.
+        if result.get("last_run_failed") or result.get("never_run"):
+            return RiskLevel.HIGH
+
+        # Set up, but when it last ran cannot be read: MEDIUM, never a made-up
+        # day count (honest degradation, context.md Decision 4).
+        if result.get("status_unknown") or days_since_backup is None:
+            return RiskLevel.MEDIUM
 
         if days_since_backup >= 30:
             return RiskLevel.HIGH
@@ -374,15 +500,40 @@ class BackupAuditor(BaseAuditor):
             else:
                 return (
                     "CRITICAL: No backup system detected! Your data is at risk. "
-                    "HOW TO FIX: Install and configure a backup tool like rsnapshot, timeshift, or borg."
+                    "HOW TO FIX: Install and configure a backup tool like rsnapshot, timeshift, or borg, "
+                    "or run your own backup script from a systemd timer with 'backup' in its name "
+                    "(DevAudit reads when such a timer last ran)."
                 )
 
-        elif risk_level == "high":
+        timer = result.get("backup_timer")
+        service = result.get("backup_service")
+
+        if risk_level == "high" and backup_enabled and result.get("last_run_failed"):
+            return (
+                f"The last run of {service} FAILED (systemd result: {result.get('last_result')}), "
+                "so your most recent backup may be missing. "
+                f"HOW TO CHECK: journalctl -u {service} -n 50"
+            )
+
+        if risk_level == "high" and backup_enabled and result.get("never_run"):
+            return (
+                f"Backup ({backup_type}) is set up but has not run yet, so no backup copy exists. "
+                f"HOW TO CHECK: systemctl list-timers {timer}"
+            )
+
+        if risk_level == "medium" and (result.get("status_unknown") or days_since_backup is None):
+            return (
+                f"Backup ({backup_type}) is configured, but DevAudit cannot read when it last ran. "
+                "Check its logs to confirm backups are completing."
+            )
+
+        if risk_level == "high":
             if not backup_enabled:
+                how = f"sudo systemctl enable --now {timer}" if timer else "Check backup settings and turn on automated backups."
                 return (
                     f"Backup system ({backup_type}) is configured but DISABLED. "
                     "Enable it immediately. "
-                    "HOW TO FIX: Check backup settings and turn on automated backups."
+                    f"HOW TO FIX: {how}"
                 )
             else:
                 return (

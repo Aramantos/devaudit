@@ -86,6 +86,8 @@ class OSUpdateAuditor(BaseAuditor):
             "security_updates": update_info.get("security_updates", 0),
             "educational_content": self.get_educational_content()
         }
+        if "package_manager" in update_info:
+            result["package_manager"] = update_info["package_manager"]
 
         # Assess risk and add recommendation
         result["risk_level"] = self.assess_risk(result).value
@@ -364,12 +366,20 @@ class OSUpdateAuditor(BaseAuditor):
                     timeout=30
                 )
                 if returncode == 0 and stdout:
-                    # Look for security updates
-                    security_count = stdout.count('-security')
+                    # One security update per package: --just-print names each
+                    # package on an Inst line AND a Conf line, so counting the
+                    # '-security' text counted every package twice (3 read as 6,
+                    # a false CRITICAL). Count the Inst lines only.
+                    security_count = sum(
+                        1 for line in stdout.splitlines()
+                        if line.startswith("Inst ") and "-security" in line
+                    )
+                result["package_manager"] = "apt"
 
             # Try yum/dnf (RHEL/CentOS/Fedora)
             elif self.check_command_exists("yum") or self.check_command_exists("dnf"):
                 cmd = "dnf" if self.check_command_exists("dnf") else "yum"
+                result["package_manager"] = cmd
 
                 stdout, stderr, returncode = self.run_command(
                     [cmd, "check-update"],
@@ -395,6 +405,7 @@ class OSUpdateAuditor(BaseAuditor):
 
             # Try pacman (Arch Linux)
             elif self.check_command_exists("pacman"):
+                result["package_manager"] = "pacman"
                 stdout, stderr, returncode = self.run_command(
                     ["pacman", "-Qu"],
                     timeout=30
@@ -483,28 +494,50 @@ class OSUpdateAuditor(BaseAuditor):
             return (
                 f"{security_updates} security updates pending. "
                 "Install IMMEDIATELY—these patch known vulnerabilities. "
-                "HOW TO FIX: Settings → Windows Update → Check for updates → Install all."
+                f"HOW TO FIX: {self._how_to_update(result, install_all=True)}"
             )
         elif risk_level == "high":
             return (
                 f"{security_updates} security update(s) pending. "
                 "Install as soon as possible. "
-                "HOW TO FIX: Settings → Windows Update → Check for updates."
+                f"HOW TO FIX: {self._how_to_update(result)}"
             )
         elif risk_level == "medium":
             return (
                 f"{update_count} updates pending. "
                 "Install during next maintenance window. "
-                "HOW TO FIX: Settings → Windows Update → Check for updates."
+                f"HOW TO FIX: {self._how_to_update(result)}"
             )
         elif risk_level == "low":
             return (
                 f"{update_count} update(s) pending. "
                 "Install when convenient. "
-                "HOW TO FIX: Settings → Windows Update → Check for updates."
+                f"HOW TO FIX: {self._how_to_update(result)}"
             )
         else:
             return "System is up to date or update status could not be determined."
+
+    # How to install updates, per Linux package manager. M1's first Linux run
+    # (the Pi 5, 2026-07-04) told a Raspberry Pi user to open Windows Update.
+    LINUX_UPDATE_COMMANDS = {
+        "apt": "sudo apt update && sudo apt upgrade",
+        "dnf": "sudo dnf upgrade",
+        "yum": "sudo yum update",
+        "pacman": "sudo pacman -Syu",
+    }
+
+    def _how_to_update(self, result: Dict, install_all: bool = False) -> str:
+        """The HOW TO FIX for the machine this runs on."""
+        if self.platform == "Windows":
+            if install_all:
+                return "Settings → Windows Update → Check for updates → Install all."
+            return "Settings → Windows Update → Check for updates."
+        if self.platform == "Darwin":
+            return "System Settings → General → Software Update (or `softwareupdate --install --all`)."
+        command = self.LINUX_UPDATE_COMMANDS.get(result.get("package_manager", ""))
+        if command:
+            return f"run `{command}`."
+        return "use your distribution's package manager to install the pending updates."
 
     def get_educational_content(self) -> Dict[str, str]:
         """
