@@ -486,20 +486,27 @@ class BackupAuditor(BaseAuditor):
         days_since_backup = result.get("days_since_backup", 999)
         backup_type = result.get("backup_type", "None")
 
+        # A red says what was checked, so it names what is missing (caretaker's
+        # read of John's PC, 2026-11-12: its CRITICAL is true, and should say why).
         if risk_level == "critical":
             if self.platform == "Windows":
                 return (
                     "CRITICAL: No backup system detected! Your data is at risk. "
+                    "(DevAudit looked for Windows Backup. It does not yet read File History, "
+                    "system images or other backup apps.) "
                     "HOW TO FIX: Settings → Update & Security → Backup → Add a drive → Enable 'Back up using File History'."
                 )
             elif self.platform == "Darwin":
                 return (
                     "CRITICAL: No backup system detected! Your data is at risk. "
+                    "(DevAudit looked for Time Machine.) "
                     "HOW TO FIX: System Preferences → Time Machine → Select Backup Disk → Turn On."
                 )
             else:
                 return (
                     "CRITICAL: No backup system detected! Your data is at risk. "
+                    "(DevAudit looked for a systemd timer named for a backup, and for rsnapshot, "
+                    "duplicity, timeshift, borg and restic configuration.) "
                     "HOW TO FIX: Install and configure a backup tool like rsnapshot, timeshift, or borg, "
                     "or run your own backup script from a systemd timer with 'backup' in its name "
                     "(DevAudit reads when such a timer last ran)."
@@ -557,7 +564,14 @@ class BackupAuditor(BaseAuditor):
 
         else:
             last_backup = result.get("last_backup", "Unknown")
-            return f"Backups are configured and recent. Last backup: {last_backup}"
+            text = f"Backups are configured and recent. Last backup: {last_backup}"
+            if timer:
+                # Found by the timer's name: that proves it ran, not what it copies.
+                text += (
+                    f". DevAudit reads that {timer} ran, not what it copies: "
+                    "check it covers the files you care about."
+                )
+            return text
 
     def get_educational_content(self) -> Dict[str, str]:
         """
